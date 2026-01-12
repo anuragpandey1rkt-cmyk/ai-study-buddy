@@ -3,6 +3,16 @@
 # ==================================================
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from supabase import create_client
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+supabase = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_ANON_KEY")
+)
 
 app = FastAPI()
 
@@ -22,21 +32,82 @@ load_dotenv()
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 def save_study(user_id, minutes):
+    today = datetime.date.today()
+
+    # log study
     supabase.table("study_logs").insert({
         "user_id": user_id,
-        "date": str(datetime.date.today()),
+        "date": str(today),
         "minutes": minutes
     }).execute()
+
+    # fetch stats
+    stats = supabase.table("user_stats").select("*").eq("user_id", user_id).execute().data[0]
+
+    xp_gain = minutes * 2
+    new_xp = stats["xp"] + xp_gain
+
+    # streak logic
+    last_date = stats["last_study_date"]
+    if last_date == str(today - datetime.timedelta(days=1)):
+        streak = stats["streak"] + 1
+    elif last_date == str(today):
+        streak = stats["streak"]
+    else:
+        streak = 1
+
+    supabase.table("user_stats").update({
+        "xp": new_xp,
+        "streak": streak,
+        "last_study_date": str(today)
+    }).eq("user_id", user_id).execute()
+    
+def ensure_user_exists(user_id):
+    res = supabase.table("user_stats").select("*").eq("user_id", user_id).execute()
+    if not res.data:
+        supabase.table("user_stats").insert({
+            "user_id": user_id,
+            "xp": 0,
+            "streak": 0,
+            "last_study_date": None
+        }).execute()
 
 
 from supabase import create_client
 import streamlit as st
 import time
 import datetime
-import os
 from groq import Groq
 
 #helper functions
+
+def complete_weekly_challenge(user_id):
+    week_id = datetime.date.today().strftime("%Y-%W")
+
+    existing = (
+        supabase
+        .table("weekly_challenges")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("week", week_id)
+        .execute()
+        .data
+    )
+
+    if existing:
+        return False  # already completed
+
+    supabase.table("weekly_challenges").insert({
+        "user_id": user_id,
+        "week": week_id,
+        "completed": True,
+        "xp": 100
+    }).execute()
+
+    # update XP
+    supabase.rpc("add_xp", {"uid": user_id, "points": 100}).execute()
+    return True
+
 def register_activity():
     today = datetime.date.today()
 
@@ -63,6 +134,21 @@ def register_activity():
 
     # ---------- SAVE TO BACKEND ----------
     save_progress(minutes=0)
+#SIMPLE LOGIN UI (EMAIL MAGIC LINK)
+st.title("📘 AI Study Buddy")
+
+if "user" not in st.session_state:
+    email = st.text_input("📧 Enter your email")
+    if st.button("🔐 Send Magic Link"):
+        supabase.auth.sign_in_with_otp({"email": email})
+        st.success("Check your email for the login link")
+    st.stop()
+session = supabase.auth.get_session()
+
+if session and session.user:
+    st.session_state.user = session.user
+    user_id = session.user.id
+ensure_user_exists(user_id)
 
 
 # ---------------- SESSION STATE INIT ----------------
@@ -318,6 +404,10 @@ with st.sidebar:
 # ==================================================
     
 if st.session_state.feature == "🏠 Home":
+     stats = supabase.table("user_stats").select("*").eq("user_id", user_id).execute().data[0]
+
+     st.metric("⭐ XP", stats["xp"])
+     st.metric("🔥 Streak", stats["streak"])
 
     # =============================
 # ===============================
@@ -345,20 +435,12 @@ if st.session_state.feature == "🏠 Home":
 # =============================
     st.subheader("🏆 Weekly Challenge")
 
-    c1, c2 = st.columns(2)
-    c1.metric("📊 Activities Done", f"{st.session_state.weekly_activity_count}/3")
-    c2.metric("⭐ Reward", "100 XP")
+    if st.button("Complete Weekly Challenge"):
+        if complete_weekly_challenge(user_id):
+            st.success("🎉 Weekly Challenge Completed! +100 XP")
+        else:
+            st.info("✅ Already completed this week")
 
-    if (
-    st.session_state.weekly_activity_count >= 3
-    and not st.session_state.weekly_reward_claimed
-    ):
-        add_xp(100)
-        st.session_state.weekly_reward_claimed = True
-        st.success("🏆 Weekly Challenge Completed! +100 XP")
-
-    else:
-        st.info("Complete 3 activities to unlock weekly reward")
     
 
 
@@ -442,9 +524,10 @@ elif st.session_state.feature == "❓ Quiz Generator":
             else:
                 st.error(f"Wrong ❌ (Correct: {correct})")
         st.session_state.last_study_date = datetime.date.today()
-    if st.button("End Study Session"):
-       save_study(st.session_state.user_id, minutes_studied)
-       st.success("Study session saved 🎉")
+    if st.button("✅ Finish Study"):
+        save_study(user_id, minutes=25)
+        st.success("Study saved! XP updated 🔥")
+
 
 
 # ==================================================
@@ -530,9 +613,9 @@ elif st.session_state.feature == "⏳ Study Session":
 
         add_xp(25)
         save_progress(total_minutes)
-    if st.button("End Study Session"):
-      save_study(st.session_state.user_id, minutes_studied)
-      st.success("Study session saved 🎉")
+    if st.button("✅ Finish Study"):
+        save_study(user_id, minutes=25)
+        st.success("Study saved! XP updated 🔥")
 
     
 
