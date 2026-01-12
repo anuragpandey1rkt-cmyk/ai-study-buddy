@@ -581,9 +581,9 @@ def main():
         
         # FEATURE LIST
         features = [
-            "🏠 Home", "🎮 Gamification Dashboard", "🎯 Daily Challenge", "📈 Weekly Progress",
-            "📘 Explain Topic", "📝 Summarize Notes", "❓ Quiz Generator", "🧠 Self Assessment",
-            "⏱️ Exam Mode", "📚 Flashcards", "🔁 Revision Mode", "🎯 Learning Outcomes",
+            "🏠 Home", "🎮 Gamification Dashboard","🏆 Leaderboard", "🎯 Daily Challenge", "📈 Weekly Progress",
+            "📘 Explain Topic", "📝 Summarize Notes", "❓ Quiz Generator","🧠 Mind Maps",
+            "⏱️ Exam Mode", "📚 Flashcards","🧠 Self Assessment", "🔁 Revision Mode", "🎯 Learning Outcomes",
             "💼 Career Connection", "❌ Mistake Explainer", "💬 Chat with AI",
             "⏳ Study Session", "📊 Progress Tracker", "🗺️ Study Roadmap"
         ]
@@ -607,11 +607,11 @@ def main():
     f = st.session_state.feature
     if f == "🏠 Home": render_home()
     elif f == "🎮 Gamification Dashboard": render_gamification()
-    elif f == "🏆 Global Leaderboard": render_leaderboard()    
+    elif f == "🏆 Leaderboard": render_leaderboard()    
     elif f == "🎯 Daily Challenge": render_daily_challenge()
     elif f == "📈 Weekly Progress": render_weekly_progress()
     elif f == "📘 Explain Topic": render_explain_topic()
-    elif f == "🧠 AI Mind Map Generator": render_mindmap()    
+    elif f == "🧠 Self Assessment",": render_mindmap()    
     elif f == "📝 Summarize Notes": render_summary()
     elif f == "❓ Quiz Generator": render_quiz()
     elif f == "⏳ Study Session": render_study_session()    
