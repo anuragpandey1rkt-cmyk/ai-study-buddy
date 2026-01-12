@@ -7,7 +7,24 @@ from supabase import create_client
 import os
 from dotenv import load_dotenv
 
+if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_ANON_KEY"):
+    st.error("Supabase credentials not found. Check Streamlit Secrets.")
+    st.stop()
+
 load_dotenv()
+
+st.markdown("""
+<style>
+button {
+    width: 100%;
+    font-size: 18px;
+}
+@media (max-width: 768px) {
+    h1 { font-size: 24px; }
+    h2 { font-size: 20px; }
+}
+</style>
+""", unsafe_allow_html=True)
 
 supabase = create_client(
     os.getenv("SUPABASE_URL"),
