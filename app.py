@@ -404,22 +404,22 @@ with st.sidebar:
 # ==================================================
     
 if st.session_state.feature == "🏠 Home":
-     stats = supabase.table("user_stats").select("*").eq("user_id", user_id).execute().data[0]
+    stats = supabase.table("user_stats").select("*").eq("user_id", user_id).execute().data[0]
 
-     st.metric("⭐ XP", stats["xp"])
-     st.metric("🔥 Streak", stats["streak"])
+    st.metric("⭐ XP", stats["xp"])
+    st.metric("🔥 Streak", stats["streak"])
 
     # =============================
 # ===============================
 # 🎯 DAILY CHALLENGE (AUTO)
 # ===============================
-     today = datetime.date.today()
+    today = datetime.date.today()
 
-     if st.session_state.daily_challenge_date != today:
+    if st.session_state.daily_challenge_date != today:
          st.session_state.daily_challenge_done = False
          st.session_state.daily_challenge_date = today
 
-     if (
+    if (
          st.session_state.last_study_date == today
          and not st.session_state.daily_challenge_done
         ):
