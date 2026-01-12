@@ -209,9 +209,9 @@ if st.session_state.user is None:
                 "redirect_to": "https://ai-study-buddy-student.streamlit.app"
             }
             )
-            st.success("Password reset email sent. Check your inbox.")
-         except Exception as e:
-             st.error("Failed to send reset email")
+              st.success("Password reset email sent. Check your inbox.")
+        except Exception as e:
+              st.error("Failed to send reset email")
     with tab2:
         email = st.text_input("Email", key="signup_email")
         password = st.text_input("Password", type="password", key="signup_password")
