@@ -69,6 +69,46 @@ def go_to(page):
 # ==========================================
 # 3. BACKEND HELPERS (AI, Auth, DB)
 # ==========================================
+# ... inside Section 3 ...
+
+from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
+#extract_youtube_transcript
+def extract_youtube_transcript(video_url):
+    try:
+        # Extract Video ID using Regex
+        video_id_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", video_url)
+        if not video_id_match:
+            return "Error: Invalid YouTube URL"
+        
+        video_id = video_id_match.group(1)
+        
+        # 1. Try to get available transcripts (Manual OR Auto-generated)
+        try:
+            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            
+            # 2. Try to fetch English or Hindi specifically
+            # This looks for 'en', 'en-US', 'hi' etc.
+            transcript = transcript_list.find_transcript(['en', 'en-US', 'en-GB', 'hi', 'hi-IN'])
+            
+        except:
+            # 3. If specific language not found, just get the first available one (Fallback)
+            try:
+                transcript = next(iter(transcript_list))
+            except:
+                return "Error: No transcripts found. This video likely has no captions (CC) enabled."
+
+        # 4. Fetch the actual text
+        fetched_transcript = transcript.fetch()
+        transcript_text = " ".join([i['text'] for i in fetched_transcript])
+        return transcript_text
+
+    except TranscriptsDisabled:
+        return "Error: Subtitles are disabled for this video."
+    except NoTranscriptFound:
+        return "Error: No subtitles found for this video."
+    except Exception as e:
+        return f"Error: {str(e)}"
+
 
 def ask_ai(prompt, system_role="You are a helpful AI tutor."):
     try:
@@ -324,23 +364,37 @@ def render_explain_topic():
         add_xp(15, "Explanation")
 
 def render_youtube_summary():
-    st.header("📺 YouTube Summarizer")
-    url = st.text_input("Paste YouTube Link")
+    st.header("📺 YouTube Video Summarizer")
+    st.info("Paste a YouTube URL below. I will try to fetch Manual OR Auto-generated captions.")
     
-    if st.button("Summarize Video"):
-        try:
-            with st.spinner("Watching video for you..."):
-                video_id = url.split("v=")[1].split("&")[0]
-                transcript = YouTubeTranscriptApi.get_transcript(video_id)
-                full_text = " ".join([i['text'] for i in transcript])
-                
-                # Summarize the transcript
-                summary = ask_ai(f"Summarize this video transcript in detailed bullet points:\n{full_text[:10000]}")
-                st.markdown(summary)
-                add_xp(20, "Video Watched")
-        except Exception as e:
-            st.error("Could not retrieve transcript. (Video might not have captions).")
+    yt_url = st.text_input("Enter YouTube Video URL")
+    
+    if st.button("Fetch & Summarize"):
+        if not yt_url:
+            st.warning("Please enter a URL first.")
+            return
+
+        with st.spinner("Fetching transcript (checking for auto-captions)..."):
+            transcript = extract_youtube_transcript(yt_url)
             
+            if transcript.startswith("Error:"):
+                st.error(transcript)
+                st.help("Try a video that definitely has 'CC' visible on YouTube.")
+            else:
+                st.success("Transcript successfully fetched!")
+                
+                # Expandable Transcript View
+                with st.expander("View Full Transcript"):
+                    st.write(transcript[:2000] + ("..." if len(transcript) > 2000 else ""))
+
+                # Summarize
+                with st.spinner("AI is summarizing..."):
+                    summary = ask_ai(f"Summarize this YouTube video transcript into key takeaways and bullet points:\n\n{transcript[:15000]}")
+                    st.markdown("### 📝 Video Summary")
+                    st.markdown(summary)
+                    add_xp(25, "YouTube Summary")
+
+
 # --- UPDATED SUMMARY WITH PDF UPLOAD ---
 def render_summary():
     st.header("📝 Summarize Notes")
