@@ -1,12 +1,116 @@
 # ==================================================
 # 📘 AI STUDY BUDDY — FIXED & COMPLETE VERSION
 # ==================================================
+import requests
+BACKEND_URL = "https://ai-study-buddy-6bnl.onrender.com"
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # later restrict to frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 import streamlit as st
 import time
 import datetime
 import os
 from groq import Groq
+
+#helper functions
+def register_user(username):
+    res = requests.post(
+        f"{BACKEND_URL}/users",
+        json={"username": username}
+    )
+    return res.json()
+
+def save_progress(minutes):
+    st.session_state.study_log.append({
+        "date": datetime.date.today(),
+        "minutes": minutes,
+        "xp": st.session_state.xp,
+        "streak": st.session_state.streak
+    })
+
+def get_or_create_user():
+    if "user_id" not in st.session_state:
+        res = requests.post(
+            f"{BACKEND_URL}/users",
+            json={"username": "demo_user"}
+        )
+        st.session_state.user_id = res.json()["id"]
+
+def fetch_progress():
+    res = requests.get(f"{BACKEND_URL}/progress")
+    return res.json()
+
+def register_activity():
+    today = datetime.date.today()
+
+    # ---------- DAILY CHALLENGE ----------
+    if st.session_state.daily_challenge_date != today:
+        st.session_state.daily_challenge_date = today
+        st.session_state.daily_challenge_done = False
+
+    if not st.session_state.daily_challenge_done:
+        add_xp(25)
+        st.session_state.daily_challenge_done = True
+        st.success("🎯 Daily Challenge Completed! +25 XP")
+
+    # ---------- WEEKLY CHALLENGE ----------
+    st.session_state.weekly_activity_count += 1
+
+    if (
+        st.session_state.weekly_activity_count >= 3
+        and not st.session_state.weekly_reward_claimed
+    ):
+        add_xp(100)
+        st.session_state.weekly_reward_claimed = True
+        st.success("🏆 Weekly Challenge Completed! +100 XP")
+
+    # ---------- SAVE TO BACKEND ----------
+    save_progress(minutes=0)
+
+
+# ---------------- SESSION STATE INIT ----------------
+import datetime
+
+defaults = {
+    "feature": "🏠 Home",
+    "xp": 0,
+    "streak": 0,
+    "last_study_date": None,
+    "daily_challenge_date": datetime.date.today(),
+    "daily_challenge_done": False,
+    "weekly_activity_count": 0,
+    "weekly_reward_claimed": False,
+    "study_log": [],
+    "chat": [],
+    "quiz": []
+}
+
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
+
+def go_home():
+    st.session_state.feature = "🏠 Home"
+
+def go_to(name):
+    st.session_state.feature = name
+
+# =========================
+# ⬅️ GLOBAL BACK BUTTON
+# =========================
+if st.session_state.feature != "🏠 Home":
+    st.button("🏠 Home", key="global_home", on_click=go_home)
+    st.divider()
 
 # ===============================
 # 🔐 REQUIRED SESSION STATE INIT
@@ -48,28 +152,37 @@ init_state("chat", [])
 if "daily_challenge_done" not in st.session_state:
     st.session_state.daily_challenge_done = False
 
-if "daily_challenge_date" not in st.session_state:
-    st.session_state.daily_challenge_date = None
-
 if "last_study_date" not in st.session_state:
     st.session_state.last_study_date = None
+if "daily_challenge_done" not in st.session_state:
+    st.session_state.daily_challenge_done = False
+
+if "daily_challenge_date" not in st.session_state:
+    st.session_state.daily_challenge_date = datetime.date.today()
+
+if "weekly_activity_count" not in st.session_state:
+    st.session_state.weekly_activity_count = 0
+
+if "weekly_reward_claimed" not in st.session_state:
+    st.session_state.weekly_reward_claimed = False
+
 
 # ===============================
 # 🎮 GAMIFICATION HELPERS
 # ===============================
-def add_xp(points: int):
-    st.session_state.xp += points
-    st.session_state.level = st.session_state.xp // 100 + 1
+def add_xp(amount):
+    st.session_state.xp += amount
 
 def get_level():
     xp = st.session_state.xp
     if xp >= 600:
-        return "🏆 Master"
+        return "Master"
     elif xp >= 300:
-        return "🥇 Achiever"
+        return "Advanced"
     elif xp >= 100:
-        return "🥈 Learner"
-    return "🥉 Beginner"
+        return "Intermediate"
+    return "Beginner"
+
 
 def unlock_badges():
     if st.session_state.xp >= 50:
@@ -107,6 +220,8 @@ def animate_xp_gain(points):
         time.sleep(0.6)
     st.toast(f"+{points} XP earned 🎉", icon="⭐")
 
+
+get_or_create_user()
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -152,13 +267,6 @@ for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-# ---------------- NAV ----------------
-def go_home():
-    st.session_state.feature = "🏠 Home"
-
-
-def go_to(f):
-    st.session_state.feature = f
 
 # ---------------- SIDEBAR ----------------
 with st.sidebar:
@@ -208,26 +316,9 @@ with st.sidebar:
     )
 
 
-# =============================
-# ⬅️ GLOBAL HOME BUTTON (ONLY ONE)
-# =============================
-# =========================
-# ⬅️ GLOBAL BACK BUTTON
-# =========================
-if st.session_state.feature != "🏠 Home":
-    st.button("⬅️ Home", key="global_home_btn", on_click=go_home)
-    st.divider()
-
-
 # ==================================================
 # 🏠 HOME
 # ==================================================
-def go_to(name):
-    st.session_state.feature = name
-
-def go_home():
-    st.session_state.feature = "🏠 Home"
-
     
 if st.session_state.feature == "🏠 Home":
 
@@ -237,43 +328,41 @@ if st.session_state.feature == "🏠 Home":
 # ===============================
     today = datetime.date.today()
 
-# Reset daily challenge if new day
     if st.session_state.daily_challenge_date != today:
-       st.session_state.daily_challenge_done = False
-       st.session_state.daily_challenge_date = today
+        st.session_state.daily_challenge_done = False
+        st.session_state.daily_challenge_date = today
 
-# Auto-complete if user did ANY activity
     if (
-       len(st.session_state.study_log) > 0
-       and not st.session_state.daily_challenge_done
+        st.session_state.last_study_date == today
+        and not st.session_state.daily_challenge_done
        ):
-           st.session_state.daily_challenge_done = True
-           add_xp(25)
-           unlock_badges()
+       st.session_state.daily_challenge_done = True
+       add_xp(25)
+       st.success("🎯 Daily Challenge Completed! +25 XP")
+
 
 
 
 # =============================
 # 📅 WEEKLY CHALLENGE CARD
 # =============================
-    st.subheader("📅 Weekly Challenge")
+    st.subheader("🏆 Weekly Challenge")
 
     c1, c2 = st.columns(2)
     c1.metric("📊 Activities Done", f"{st.session_state.weekly_activity_count}/3")
     c2.metric("⭐ Reward", "100 XP")
 
     if (
-        st.session_state.weekly_activity_count >= 3
-        and not st.session_state.weekly_reward_claimed
-        ):
+    st.session_state.weekly_activity_count >= 3
+    and not st.session_state.weekly_reward_claimed
+    ):
         add_xp(100)
         st.session_state.weekly_reward_claimed = True
-        st.success("🏆 Weekly Challenge Completed!")
-    elif st.session_state.weekly_reward_claimed:
-        st.info("✅ Weekly reward already claimed")
+        st.success("🏆 Weekly Challenge Completed! +100 XP")
 
     else:
-        st.info("Complete 3 study activities this week to earn XP")    
+        st.info("Complete 3 activities to unlock weekly reward")
+    
 
 
     st.markdown("<h1 style='text-align:center'>📘 AI Study Buddy</h1>", unsafe_allow_html=True)
@@ -333,6 +422,10 @@ elif st.session_state.feature == "❓ Quiz Generator":
             "Format exactly:\nQ:...\nA)...\nB)...\nC)...\nD)...\nCorrect:A"
         )
         st.session_state.quiz = text.split("Q:")
+        register_activity()
+        add_xp(25)
+        animate_xp_gain(25)
+        st.session_state.weekly_activity_count += 1
 
     for i, q in enumerate(st.session_state.quiz):
         if not q.strip():
@@ -352,10 +445,6 @@ elif st.session_state.feature == "❓ Quiz Generator":
             else:
                 st.error(f"Wrong ❌ (Correct: {correct})")
         st.session_state.last_study_date = datetime.date.today()
-    add_xp(25)
-    animate_xp_gain(25)
-    st.session_state.weekly_activity_count += 1
-
     
 
 # ==================================================
@@ -366,10 +455,10 @@ elif st.session_state.feature == "📚 Flashcards":
     st.header("📚 Flashcards")
     if st.button("Generate Flashcards"):
         st.write(ai(f"Create 5 flashcards (Q&A) on {topic}"))
-    st.session_state.last_study_date = datetime.date.today()
-    add_xp(25)
-    animate_xp_gain(25)
-    st.session_state.weekly_activity_count += 1
+        st.session_state.last_study_date = datetime.date.today()
+        add_xp(25)
+        animate_xp_gain(25)
+        st.session_state.weekly_activity_count += 1
 
 
     
@@ -382,9 +471,10 @@ elif st.session_state.feature == "🔁 Revision Mode":
     st.header("🔁 Revision Mode")
     if st.button("Start Revision"):
         st.write(ai(f"Create revision notes with examples and mistakes for {topic}"))
-    add_xp(25)
-    animate_xp_gain(25)
-    st.session_state.weekly_activity_count += 1
+        add_xp(25)
+        animate_xp_gain(25)
+        st.session_state.weekly_activity_count += 1
+        register_activity()
 
 
 # ==================================================
@@ -414,10 +504,11 @@ elif st.session_state.feature == "⏱️ Exam Mode":
     exam_type = st.selectbox("Exam Type", ["Short Answer", "Long Answer", "MCQ"])
     if st.button("Generate Answer"):
         st.write(ai(f"Write {exam_type} exam answer on {topic}"))
-    st.session_state.last_study_date = datetime.date.today()
-    add_xp(25)
-    animate_xp_gain(25)
-    st.session_state.weekly_activity_count += 1
+        st.session_state.last_study_date = datetime.date.today()
+        add_xp(25)
+        animate_xp_gain(25)
+        st.session_state.weekly_activity_count += 1
+        register_activity()
 
 
 
@@ -431,20 +522,16 @@ elif st.session_state.feature == "⏳ Study Session":
     cycles = st.number_input("Cycles", 1, 10, 2)
 
     if st.button("Start Session"):
-        for i in range(cycles):
-            st.info(f"Study Cycle {i+1}")
-            time.sleep(study * 60)
-            st.success("Break Time ☕")
-            time.sleep(brk * 60)
+        total_minutes = study * cycles
 
         st.success("Session Completed 🎉")
         st.session_state.last_study_date = datetime.date.today()
-    st.session_state.last_study_date = datetime.date.today()
-    add_xp(25)
-    animate_xp_gain(25)
-    st.session_state.weekly_activity_count += 1
+        st.session_state.weekly_activity_count += 1
 
+        add_xp(25)
+        save_progress(total_minutes)
 
+    
 
 
 # ==================================================
@@ -463,16 +550,19 @@ elif st.session_state.feature == "💬 Chat with AI":
 #📊 Progress Tracker
 elif st.session_state.feature == "📊 Progress Tracker":
 
-    st.subheader("📊 Progress Tracker")
+    st.subheader("📊 Your Real Progress")
+
+    progress = fetch_progress()
 
     if not st.session_state.study_log:
-        st.warning("No study data yet. Complete a study session.")
+       st.info("No study data yet")
     else:
-        total = sum(x["minutes"] for x in st.session_state.study_log)
-        st.metric("Total Study Time", f"{total} minutes")
+       total_minutes = sum(i["minutes"] for i in st.session_state.study_log)
+       st.metric("⏱️ Total Study Time", f"{total_minutes} mins")
+       st.metric("⭐ XP", st.session_state.xp)
+       st.metric("🔥 Streak", f"{st.session_state.streak} days")
 
-        st.metric("XP", st.session_state.xp)
-        st.metric("Study Streak", f"{st.session_state.streak} days")
+
     
 #Weekly Progress
 elif st.session_state.feature == "📈 Weekly Progress":
@@ -541,10 +631,11 @@ elif st.session_state.feature == "🧠 Self Assessment":
             f"Generate 3 self-assessment questions for {topic}"
         )
         st.write(qs)
-    st.session_state.last_study_date = datetime.date.today()
-    add_xp(25)
-    animate_xp_gain(25)
-    st.session_state.weekly_activity_count += 1
+        st.session_state.last_study_date = datetime.date.today()
+        add_xp(25)
+        animate_xp_gain(25)
+        st.session_state.weekly_activity_count += 1
+        register_activity()
 
 #🎮 Gamification Dashboard
 elif st.session_state.feature == "🎮 Gamification Dashboard":
@@ -570,36 +661,41 @@ elif st.session_state.feature == "🎯 Daily Challenge":
 
     today = datetime.date.today()
 
-    # Reset challenge if new day
+    # ---- SAFE INITIALIZATION ----
+    if "last_study_date" not in st.session_state:
+        st.session_state.last_study_date = None
+
+    if "daily_challenge_done" not in st.session_state:
+        st.session_state.daily_challenge_done = False
+
+    if "daily_challenge_date" not in st.session_state:
+        st.session_state.daily_challenge_date = today
+
+    # ---- RESET IF NEW DAY ----
     if st.session_state.daily_challenge_date != today:
         st.session_state.daily_challenge_done = False
         st.session_state.daily_challenge_date = today
 
+    # ---- UI ----
     if st.session_state.daily_challenge_done:
-        st.success("✅ Today's challenge already completed!")
+        st.success("✅ Today's challenge already completed")
     else:
-        st.info("📌 Today's Challenge")
-        st.write("👉 Complete **any one learning activity** today")
+        st.info("👉 Complete any study activity today to auto-complete this challenge")
 
-        # AUTO-COMPLETE LOGIC (NO MANUAL BUTTON)
-        if st.session_state.last_study_date == today:
-            st.session_state.daily_challenge_done = True
-            st.session_state.xp += 25
+    # ---- AUTO-COMPLETE LOGIC ----
+    if (
+        st.session_state.last_study_date == today
+        and not st.session_state.daily_challenge_done
+    ):
+        st.session_state.daily_challenge_done = True
+        add_xp(25)
+        animate_xp_gain(25)
 
-            st.balloons()
-            st.success("🎉 Daily Challenge Completed! +25 XP")
+        st.balloons()
+        st.success("🎉 Daily Challenge Completed! +25 XP")
 
-            motivation = ai(
-                "Give a short motivational message for completing today's study goal."
-            )
-            st.write(motivation)
-    st.session_state.last_study_date = datetime.date.today()
-    add_xp(25)
-    animate_xp_gain(25)
-    st.session_state.weekly_activity_count += 1
+        motivation = ai(
+            "Give a short motivational message for a student who completed today's study goal."
+        )
+        st.write(motivation)
 
-if "weekly_activity_count" not in st.session_state:
-    st.session_state.weekly_activity_count = 0
-
-if "weekly_reward_claimed" not in st.session_state:
-    st.session_state.weekly_reward_claimed = False
