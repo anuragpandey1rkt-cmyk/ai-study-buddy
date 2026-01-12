@@ -790,11 +790,11 @@ elif st.session_state.feature == "⏱️ Exam Mode":
 # ==================================================
 # ⏳ STUDY SESSION (CUSTOM)
 # ==================================================
-elif st.session_state.feature == "📚 Study Session":
+elif st.session_state.feature == "⏳ Study Session":
 
     require_login()  # ⛔ HARD GATE — prevents all crashes
 
-    st.header("📚 Study Session")
+    st.header("⏳ Study Session")
 
     study = st.number_input("Study minutes", 1, 120, 25)
     brk = st.number_input("Break minutes", 1, 60, 5)
