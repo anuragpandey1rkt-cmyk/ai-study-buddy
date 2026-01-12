@@ -7,6 +7,30 @@ from supabase import create_client
 from groq import Groq
 from PyPDF2 import PdfReader
 import graphviz
+
+def make_pwa_ready():
+    # 1. Meta Tags for PWA-like behavior (Standalone Mode)
+    st.markdown("""
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+        
+        <style>
+            /* Hide Streamlit's default top menu and footer for a clean app look */
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            
+            /* Tweak padding for mobile screens */
+            .block-container {
+                padding-top: 1rem !important;
+                padding-bottom: 5rem !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+# CALL THIS FUNCTION INSIDE main()
 # ==========================================
 # 1. CONFIGURATION & INIT
 # ==========================================
@@ -870,6 +894,7 @@ def render_progress_tracker():
 # ==========================================
 
 def main():
+    make_pwa_ready()
     if not st.session_state.user:
         # Simple Login Page
         st.title("📘 AI Study Buddy Login")
