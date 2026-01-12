@@ -611,7 +611,7 @@ def main():
     elif f == "🎯 Daily Challenge": render_daily_challenge()
     elif f == "📈 Weekly Progress": render_weekly_progress()
     elif f == "📘 Explain Topic": render_explain_topic()
-    elif f == "🧠 Self Assessment",": render_mindmap()    
+    elif f == "🧠 Mind Maps": render_mindmap()    
     elif f == "📝 Summarize Notes": render_summary()
     elif f == "❓ Quiz Generator": render_quiz()
     elif f == "⏳ Study Session": render_study_session()    
