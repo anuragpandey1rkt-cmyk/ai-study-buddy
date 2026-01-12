@@ -365,62 +365,16 @@ def render_exam_mode():
         st.markdown(ask_ai(f"Give me a hard exam question about {topic}."))
 
 def render_chat():
-    st.header("💬 Chat with AI Tutor")
-    
-    # 1. Display Chat History
+    st.header("💬 Chat with AI")
     for msg in st.session_state.chat_history:
-        with st.chat_message(msg['role']):
-            # If the message has an image, display it first
-            if "image" in msg:
-                st.image(msg["image"], width=200)
-            st.write(msg['content'])
-            
-    # 2. Input Area (Text OR Image)
-    col1, col2 = st.columns([0.85, 0.15])
-    
-    with col1:
-        user_input = st.chat_input("Ask your AI Tutor...")
+        st.chat_message(msg['role']).write(msg['content'])
         
-    with col2:
-        # Small upload button next to chat
-        uploaded_img = st.file_uploader("📷", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
-
-    # 3. Handle Inputs
-    if user_input or uploaded_img:
-        # Prepare User Message
-        user_msg = {"role": "user", "content": ""}
-        
-        # Handle Image
-        if uploaded_img:
-            st.image(uploaded_img, width=200) # Preview
-            user_msg["image"] = uploaded_img
-            user_msg["content"] += "[User uploaded an image] "
-            
-        # Handle Text
-        if user_input:
-            user_msg["content"] += user_input
-            
-        # Append to History & Display
-        st.session_state.chat_history.append(user_msg)
-        with st.chat_message("user"):
-            if "image" in user_msg: st.image(user_msg["image"], width=200)
-            st.write(user_msg["content"])
-            
-        # Generate AI Response
-        with st.spinner("Thinking..."):
-            # Note: Since Llama 3.1 8b is text-only, we modify the prompt to acknowledge the image
-            # If you switch to a vision model later, you can send the image bytes directly.
-            if uploaded_img:
-                final_prompt = f"The user uploaded an image. {user_input if user_input else 'Analyze this context.'}"
-            else:
-                final_prompt = user_input
-                
-            response = ask_ai(final_prompt)
-            
-            st.session_state.chat_history.append({"role": "assistant", "content": response})
-            with st.chat_message("assistant"):
-                st.write(response)
-
+    if user_input := st.chat_input("Ask your AI Tutor..."):
+        st.session_state.chat_history.append({"role": "user", "content": user_input})
+        st.chat_message("user").write(user_input)
+        response = ask_ai(user_input)
+        st.session_state.chat_history.append({"role": "assistant", "content": response})
+        st.chat_message("assistant").write(response)
 def render_roadmap():
     st.header("🗺️ Study Roadmap")
     goal = st.text_input("What is your goal? (e.g., Learn Python in 30 days)")
