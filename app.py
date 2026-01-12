@@ -7,7 +7,7 @@ from supabase import create_client
 import os
 from dotenv import load_dotenv
 
-if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_ANON_KEY"):
+if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_KEY"):
     st.error("Supabase credentials not found. Check Streamlit Secrets.")
     st.stop()
 
