@@ -3,6 +3,7 @@ import datetime
 import time
 import os
 import json
+import re
 from supabase import create_client
 from groq import Groq
 from PyPDF2 import PdfReader
