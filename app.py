@@ -2,6 +2,7 @@ import streamlit as st
 import datetime
 import time
 import os
+import json
 from supabase import create_client
 from groq import Groq
 
@@ -48,9 +49,10 @@ def init_session_state():
         "streak": 0,
         "last_study_date": None,
         "chat_history": [],
-        "quiz_data": [],
-        "quiz_generated": False,
-        "study_timer_running": False
+        "quiz_data": [],      # Stores the current active quiz
+        "quiz_answers": {},   # Stores user answers
+        "study_timer_active": False,
+        "study_start_time": None
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -58,11 +60,14 @@ def init_session_state():
 
 init_session_state()
 
+# --- NAVIGATION HELPER ---
+def go_to(page):
+    st.session_state.feature = page
+
 # ==========================================
-# 3. BACKEND HELPERS (Auth, DB, AI)
+# 3. BACKEND HELPERS (AI, Auth, DB)
 # ==========================================
 
-# --- AI WRAPPER ---
 def ask_ai(prompt, system_role="You are a helpful AI tutor."):
     try:
         completion = groq_client.chat.completions.create(
@@ -72,7 +77,7 @@ def ask_ai(prompt, system_role="You are a helpful AI tutor."):
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=1000
+            max_tokens=1500
         )
         return completion.choices[0].message.content
     except Exception as e:
@@ -95,7 +100,6 @@ def signup_user(email, password):
     try:
         response = supabase.auth.sign_up({"email": email, "password": password})
         if response.user:
-            # Create initial stats row
             supabase.table("user_stats").insert({
                 "user_id": response.user.id,
                 "xp": 0,
@@ -111,16 +115,8 @@ def logout_user():
     st.session_state.clear()
     st.rerun()
 
-def reset_password(email):
-    try:
-        supabase.auth.reset_password_for_email(email, options={"redirect_to": "http://localhost:8501"})
-        st.success("Password reset link sent to email.")
-    except Exception as e:
-        st.error(f"Error: {e}")
-
 # --- GAMIFICATION & DB SYNC ---
 def sync_user_stats(user_id):
-    """Fetch XP and Streak from DB to Session State"""
     try:
         data = supabase.table("user_stats").select("*").eq("user_id", user_id).execute()
         if data.data:
@@ -129,253 +125,307 @@ def sync_user_stats(user_id):
             st.session_state.streak = stats.get('streak', 0)
             st.session_state.last_study_date = stats.get('last_study_date')
     except Exception as e:
-        print(f"Sync Error: {e}")
+        pass
 
 def add_xp(amount, activity_name):
-    """Update XP locally and in DB"""
-    if not st.session_state.user_id:
-        return
-
-    # Update Local
+    if not st.session_state.user_id: return
     st.session_state.xp += amount
-    
-    # Update DB
     try:
-        # Update User Stats
         supabase.table("user_stats").update({"xp": st.session_state.xp}).eq("user_id", st.session_state.user_id).execute()
-        
-        # Log Activity
         supabase.table("study_logs").insert({
             "user_id": st.session_state.user_id,
-            "minutes": 5, # Default generic time for small tasks
+            "minutes": 10, 
             "activity_type": activity_name,
             "date": str(datetime.date.today())
         }).execute()
-        
         st.toast(f"🎉 +{amount} XP for {activity_name}!", icon="⭐")
+        update_streak()
     except Exception as e:
-        st.error(f"Failed to save progress: {e}")
+        st.error(f"Sync Error: {e}")
 
 def update_streak():
-    """Check dates and update streak logic"""
-    if not st.session_state.user_id: 
-        return
-        
+    if not st.session_state.user_id: return
     today = str(datetime.date.today())
-    last_date = st.session_state.last_study_date
+    if st.session_state.last_study_date == today: return
     
-    if last_date == today:
-        return # Already studied today
-        
     new_streak = 1
-    if last_date:
-        last_date_obj = datetime.datetime.strptime(last_date, "%Y-%m-%d").date()
-        if (datetime.date.today() - last_date_obj).days == 1:
+    if st.session_state.last_study_date:
+        last_obj = datetime.datetime.strptime(st.session_state.last_study_date, "%Y-%m-%d").date()
+        if (datetime.date.today() - last_obj).days == 1:
             new_streak = st.session_state.streak + 1
             
-    # Update DB
-    supabase.table("user_stats").update({
-        "streak": new_streak,
-        "last_study_date": today
-    }).eq("user_id", st.session_state.user_id).execute()
-    
+    supabase.table("user_stats").update({"streak": new_streak, "last_study_date": today}).eq("user_id", st.session_state.user_id).execute()
     st.session_state.streak = new_streak
     st.session_state.last_study_date = today
 
 # ==========================================
-# 4. FEATURE VIEWS (The Pages)
+# 4. FEATURE RENDERERS
 # ==========================================
 
-def render_auth_page():
-    st.title("📘 AI Study Buddy")
-    tab1, tab2, tab3 = st.tabs(["🔐 Login", "🆕 Sign Up", "🔄 Reset Password"])
-    
-    with tab1:
-        email = st.text_input("Email", key="l_email")
-        password = st.text_input("Password", type="password", key="l_pass")
-        if st.button("Login", type="primary"):
-            login_user(email, password)
-            
-    with tab2:
-        email = st.text_input("Email", key="s_email")
-        password = st.text_input("Password", type="password", key="s_pass")
-        if st.button("Sign Up"):
-            signup_user(email, password)
-            
-    with tab3:
-        email = st.text_input("Enter Email for Reset Link", key="r_email")
-        if st.button("Send Reset Link"):
-            reset_password(email)
-
 def render_home():
-    st.title(f"Welcome back!")
+    st.title(f"👋 Welcome Back!")
     
     # Dashboard Metrics
     c1, c2, c3 = st.columns(3)
-    c1.metric("⭐ XP", st.session_state.xp)
+    c1.metric("⭐ Total XP", st.session_state.xp)
     c2.metric("🔥 Streak", f"{st.session_state.streak} Days")
-    
-    level = "Beginner"
-    if st.session_state.xp > 500: level = "Master"
-    elif st.session_state.xp > 200: level = "Intermediate"
+    level = "Master" if st.session_state.xp > 500 else "Intermediate" if st.session_state.xp > 200 else "Beginner"
     c3.metric("🏆 Rank", level)
     
     st.divider()
+    st.markdown("### 🚀 Quick Access")
     
-    # Quick Actions
-    st.subheader("🚀 Quick Actions")
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
-        if st.button("📘 Explain Topic", use_container_width=True):
-            st.session_state.feature = "Explain Topic"
-            st.rerun()
-        if st.button("❓ Quiz Generator", use_container_width=True):
-            st.session_state.feature = "Quiz Generator"
-            st.rerun()
+        st.button("📘 Explain Topic", use_container_width=True, on_click=go_to, args=("📘 Explain Topic",))
+        st.button("❓ Quiz Generator", use_container_width=True, on_click=go_to, args=("❓ Quiz Generator",))
     with col2:
-        if st.button("📚 Flashcards", use_container_width=True):
-            st.session_state.feature = "Flashcards"
-            st.rerun()
-        if st.button("💬 Chat AI", use_container_width=True):
-            st.session_state.feature = "Chat"
-            st.rerun()
-
-def render_explain():
-    st.header("📘 Explain Topic")
-    topic = st.text_input("What do you want to understand?")
-    style = st.selectbox("Explanation Style", ["Simple (5 year old)", "High School", "University Expert"])
-    
-    if st.button("Explain"):
-        with st.spinner("AI is thinking..."):
-            prompt = f"Explain {topic} in a {style} style. Keep it clear and concise."
-            response = ask_ai(prompt)
-            st.markdown(response)
-            add_xp(10, "Topic Explanation")
-            update_streak()
+        st.button("📚 Flashcards", use_container_width=True, on_click=go_to, args=("📚 Flashcards",))
+        st.button("⏱️ Exam Mode", use_container_width=True, on_click=go_to, args=("⏱️ Exam Mode",))
+    with col3:
+        st.button("💬 Chat with AI", use_container_width=True, on_click=go_to, args=("💬 Chat with AI",))
+        st.button("🗺️ Study Roadmap", use_container_width=True, on_click=go_to, args=("🗺️ Study Roadmap",))
 
 def render_quiz():
-    st.header("❓ Quiz Generator")
-    topic = st.text_input("Enter Topic for Quiz")
+    st.header("❓ Interactive Quiz Generator")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        topic = st.text_input("Enter Quiz Topic")
+    with col2:
+        num_q = st.number_input("No. of Questions", min_value=1, max_value=10, value=3)
     
     if st.button("Generate Quiz"):
-        with st.spinner("Generating Questions..."):
-            prompt = f"Create 3 multiple choice questions about {topic}. Format: Q1: Question? A) .. B) .. C) .. Correct: A"
-            response = ask_ai(prompt)
-            st.session_state.quiz_data = response
-            st.session_state.quiz_generated = True
+        with st.spinner("Generating Interactive Quiz..."):
+            # Prompt asking for JSON format for easier parsing
+            prompt = (f"Create {num_q} multiple choice questions about {topic}. "
+                      "Output ONLY valid JSON format like this: "
+                      "[{'question': '...', 'options': ['A', 'B', 'C', 'D'], 'correct': 'Option Text'}, ...]")
+            try:
+                response = ask_ai(prompt, system_role="You are a strict JSON generator.")
+                # Basic cleanup to ensure we find the JSON list
+                start = response.find('[')
+                end = response.rfind(']') + 1
+                json_str = response[start:end]
+                st.session_state.quiz_data = json.loads(json_str)
+                st.session_state.quiz_answers = {} # Reset answers
+            except:
+                st.error("AI failed to generate valid JSON. Please try again.")
+
+    # Render the Quiz if data exists
+    if st.session_state.quiz_data:
+        st.markdown("---")
+        for i, q in enumerate(st.session_state.quiz_data):
+            st.subheader(f"Q{i+1}: {q['question']}")
+            # Use a unique key for each radio button based on index
+            choice = st.radio(f"Select Answer for Q{i+1}", q['options'], key=f"q_{i}")
             
-    if st.session_state.quiz_generated:
-        st.markdown("### Your Quiz")
-        st.write(st.session_state.quiz_data)
-        if st.button("I Finished the Quiz"):
-            add_xp(50, "Completed Quiz")
-            update_streak()
-            st.success("Great job! +50 XP")
+            # Check Answer Button
+            if st.button(f"Check Answer {i+1}", key=f"btn_{i}"):
+                if choice == q['correct']:
+                    st.success("✅ Correct!")
+                    add_xp(10, "Correct Answer")
+                else:
+                    st.error(f"❌ Incorrect. The correct answer was: {q['correct']}")
 
 def render_flashcards():
-    st.header("📚 AI Flashcards")
-    topic = st.text_input("Topic for Flashcards")
-    
-    if st.button("Create Cards"):
+    st.header("📚 Flashcards")
+    topic = st.text_input("Topic")
+    if st.button("Generate Cards"):
         with st.spinner("Creating..."):
-            prompt = f"Create 5 flashcards for {topic}. Format: Front: [Term] | Back: [Definition]"
-            response = ask_ai(prompt)
-            st.markdown(response)
-            add_xp(20, "Flashcards Generated")
-            update_streak()
+            res = ask_ai(f"Create 5 flashcards for {topic}. Format: Front | Back")
+            st.session_state.flashcards = res 
+            add_xp(20, "Flashcards")
+    
+    if "flashcards" in st.session_state:
+        st.markdown(st.session_state.flashcards)
+
+def render_explain_topic():
+    st.header("📘 Explain Topic")
+    topic = st.text_input("Enter Topic")
+    level = st.selectbox("Level", ["5-Year Old", "High School", "University"])
+    if st.button("Explain"):
+        res = ask_ai(f"Explain {topic} at a {level} level.")
+        st.markdown(res)
+        add_xp(15, "Explanation")
+
+def render_summary():
+    st.header("📝 Summarize Notes")
+    text = st.text_area("Paste your notes here", height=200)
+    if st.button("Summarize"):
+        st.markdown(ask_ai(f"Summarize these notes in bullet points:\n{text}"))
+        add_xp(15, "Summary")
+
+def render_exam_mode():
+    st.header("⏱️ Exam Mode")
+    st.info("Generates a long-form question for you to practice writing.")
+    topic = st.text_input("Exam Topic")
+    if st.button("Start Exam"):
+        st.markdown(ask_ai(f"Give me a hard exam question about {topic}."))
 
 def render_chat():
-    st.header("💬 Chat with AI Tutor")
-    
-    # Display History
-    for role, text in st.session_state.chat_history:
-        with st.chat_message(role):
-            st.write(text)
-            
-    # Input
-    user_input = st.chat_input("Ask me anything...")
-    if user_input:
-        # Add User msg
-        st.session_state.chat_history.append(("user", user_input))
-        with st.chat_message("user"):
-            st.write(user_input)
-            
-        # Get AI Response
-        with st.spinner("Thinking..."):
-            ai_reply = ask_ai(user_input)
-            st.session_state.chat_history.append(("assistant", ai_reply))
-            with st.chat_message("assistant"):
-                st.write(ai_reply)
+    st.header("💬 Chat with AI")
+    for msg in st.session_state.chat_history:
+        st.chat_message(msg['role']).write(msg['content'])
+        
+    if user_input := st.chat_input("Ask your AI Tutor..."):
+        st.session_state.chat_history.append({"role": "user", "content": user_input})
+        st.chat_message("user").write(user_input)
+        response = ask_ai(user_input)
+        st.session_state.chat_history.append({"role": "assistant", "content": response})
+        st.chat_message("assistant").write(response)
 
-def render_profile():
-    st.header("👤 User Profile")
-    st.write(f"**Email:** {st.session_state.user.email}")
+def render_roadmap():
+    st.header("🗺️ Study Roadmap")
+    goal = st.text_input("What is your goal? (e.g., Learn Python in 30 days)")
+    if st.button("Create Roadmap"):
+        st.markdown(ask_ai(f"Create a week-by-week roadmap for: {goal}"))
+        add_xp(30, "Roadmap Created")
+
+def render_study_session():
+    st.header("⏳ Focus Timer")
+    minutes = st.number_input("Minutes", 1, 120, 25)
     
-    # Reset Password UI
-    new_pass = st.text_input("New Password", type="password")
-    if st.button("Update Password"):
-        try:
-            supabase.auth.update_user({"password": new_pass})
-            st.success("Password Updated")
-        except Exception as e:
-            st.error(f"Error: {e}")
+    if st.button("Start Timer"):
+        st.session_state.study_timer_active = True
+        st.session_state.study_start_time = time.time()
+        
+    if st.session_state.study_timer_active:
+        elapsed = time.time() - st.session_state.study_start_time
+        remaining = (minutes * 60) - elapsed
+        if remaining > 0:
+            st.metric("Time Remaining", f"{int(remaining // 60)}:{int(remaining % 60):02d}")
+            time.sleep(1)
+            st.rerun()
+        else:
+            st.success("Time's up!")
+            st.session_state.study_timer_active = False
+            add_xp(minutes, "Study Session")
+
+def render_gamification():
+    st.header("🎮 Gamification Dashboard")
+    st.metric("Level", "Master" if st.session_state.xp > 500 else "Novice")
+    st.progress(min(100, st.session_state.xp % 100))
+    st.write(f"Total XP: {st.session_state.xp}")
+
+def render_mistake_explainer():
+    st.header("❌ Mistake Explainer")
+    q = st.text_input("The Question")
+    wrong = st.text_input("Your Wrong Answer")
+    if st.button("Analyze Mistake"):
+        st.markdown(ask_ai(f"I answered '{wrong}' to the question '{q}'. Why is it wrong?"))
+
+def render_career():
+    st.header("💼 Career Connection")
+    skill = st.text_input("Skill/Subject")
+    if st.button("Show Jobs"):
+        st.markdown(ask_ai(f"What careers require {skill}?"))
+
+def render_learning_outcomes():
+    st.header("🎯 Learning Outcomes")
+    topic = st.text_input("Topic")
+    if st.button("Generate"):
+        st.markdown(ask_ai(f"What are the learning outcomes for {topic}?"))
+
+def render_revision():
+    st.header("🔁 Revision Mode")
+    st.info("Generates key points for quick review.")
+    topic = st.text_input("Topic to Revise")
+    if st.button("Revise"):
+        st.markdown(ask_ai(f"Give me 5 crucial bullet points to remember about {topic}"))
+
+def render_self_assessment():
+    st.header("🧠 Self Assessment")
+    st.write("Rate your confidence (1-5) on your recent topics.")
+    st.slider("Confidence Level", 1, 5)
+    if st.button("Save Log"):
+        st.success("Logged!")
+        add_xp(5, "Self Reflection")
+
+def render_daily_challenge():
+    st.header("🎯 Daily Challenge")
+    st.info("Today's Challenge: Complete 1 Quiz and Study for 20 mins.")
+    if st.session_state.xp > 20: # Mock logic
+        st.success("Challenge Completed! (+50 XP)")
+    else:
+        st.warning("In Progress...")
+
+def render_weekly_progress():
+    st.header("📈 Weekly Progress")
+    st.bar_chart({"Mon": 10, "Tue": 20, "Wed": 15}) # Placeholder data for visualization
+
+def render_progress_tracker():
+    st.header("📊 Progress Tracker")
+    st.write(f"XP: {st.session_state.xp}")
+    st.write(f"Streak: {st.session_state.streak}")
 
 # ==========================================
-# 5. MAIN APP FLOW
+# 5. MAIN NAVIGATION LOGIC
 # ==========================================
 
 def main():
-    # CHECK AUTH STATUS
     if not st.session_state.user:
-        render_auth_page()
+        # Simple Login Page
+        st.title("📘 AI Study Buddy Login")
+        tab1, tab2 = st.tabs(["Login", "Sign Up"])
+        with tab1:
+            e = st.text_input("Email")
+            p = st.text_input("Password", type="password")
+            if st.button("Login"): login_user(e, p)
+        with tab2:
+            e2 = st.text_input("Email (Sign Up)")
+            p2 = st.text_input("Password (Sign Up)", type="password")
+            if st.button("Sign Up"): signup_user(e2, p2)
         return
 
-    # SIDEBAR NAVIGATION
+    # SIDEBAR
     with st.sidebar:
-        st.image("https://cdn-icons-png.flaticon.com/512/4712/4712009.png", width=50)
         st.title("Study Buddy")
+        st.write(f"👤 {st.session_state.user.email}")
         
-        st.write(f"Logged in as: {st.session_state.user.email}")
+        # FEATURE LIST
+        features = [
+            "🏠 Home", "🎮 Gamification Dashboard", "🎯 Daily Challenge", "📈 Weekly Progress",
+            "📘 Explain Topic", "📝 Summarize Notes", "❓ Quiz Generator", "🧠 Self Assessment",
+            "⏱️ Exam Mode", "📚 Flashcards", "🔁 Revision Mode", "🎯 Learning Outcomes",
+            "💼 Career Connection", "❌ Mistake Explainer", "💬 Chat with AI",
+            "⏳ Study Session", "📊 Progress Tracker", "🗺️ Study Roadmap"
+        ]
         
-        options = ["🏠 Home", "📘 Explain Topic", "❓ Quiz Generator", "📚 Flashcards", "💬 Chat", "👤 Profile"]
-        selected = st.radio("Navigate", options)
-        
-        # Handle Sidebar Navigation vs Home Page Buttons
-        if selected == "🏠 Home":
-            st.session_state.feature = "🏠 Home"
-        elif selected == "📘 Explain Topic":
-            st.session_state.feature = "Explain Topic"
-        elif selected == "❓ Quiz Generator":
-            st.session_state.feature = "Quiz Generator"
-        elif selected == "📚 Flashcards":
-            st.session_state.feature = "Flashcards"
-        elif selected == "💬 Chat":
-            st.session_state.feature = "Chat"
-        elif selected == "👤 Profile":
-            st.session_state.feature = "Profile"
-            
-        st.divider()
-        if st.button("🚪 Logout"):
-            logout_user()
+        # Iterate to create buttons
+        for f in features:
+            if st.button(f, key=f"nav_{f}", use_container_width=True):
+                go_to(f)
+                st.rerun()
 
-    # RENDER SELECTED FEATURE
+        st.divider()
+        if st.button("🚪 Logout"): logout_user()
+
+    # GLOBAL BACK BUTTON (If not home)
     if st.session_state.feature != "🏠 Home":
         if st.button("⬅️ Back to Home"):
-            st.session_state.feature = "🏠 Home"
+            go_to("🏠 Home")
             st.rerun()
-            
-    if st.session_state.feature == "🏠 Home":
-        render_home()
-    elif st.session_state.feature == "Explain Topic":
-        render_explain()
-    elif st.session_state.feature == "Quiz Generator":
-        render_quiz()
-    elif st.session_state.feature == "Flashcards":
-        render_flashcards()
-    elif st.session_state.feature == "Chat":
-        render_chat()
-    elif st.session_state.feature == "Profile":
-        render_profile()
+
+    # ROUTING
+    f = st.session_state.feature
+    if f == "🏠 Home": render_home()
+    elif f == "🎮 Gamification Dashboard": render_gamification()
+    elif f == "🎯 Daily Challenge": render_daily_challenge()
+    elif f == "📈 Weekly Progress": render_weekly_progress()
+    elif f == "📘 Explain Topic": render_explain_topic()
+    elif f == "📝 Summarize Notes": render_summary()
+    elif f == "❓ Quiz Generator": render_quiz()
+    elif f == "🧠 Self Assessment": render_self_assessment()
+    elif f == "⏱️ Exam Mode": render_exam_mode()
+    elif f == "📚 Flashcards": render_flashcards()
+    elif f == "🔁 Revision Mode": render_revision()
+    elif f == "🎯 Learning Outcomes": render_learning_outcomes()
+    elif f == "💼 Career Connection": render_career()
+    elif f == "❌ Mistake Explainer": render_mistake_explainer()
+    elif f == "💬 Chat with AI": render_chat()
+    elif f == "⏳ Study Session": render_study_session()
+    elif f == "📊 Progress Tracker": render_progress_tracker()
+    elif f == "🗺️ Study Roadmap": render_roadmap()
 
 if __name__ == "__main__":
     main()
