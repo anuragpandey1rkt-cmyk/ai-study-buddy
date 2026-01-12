@@ -8,7 +8,7 @@ from supabase import create_client
 from groq import Groq
 from PyPDF2 import PdfReader
 import graphviz
-from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
 # ==========================================
 # 1. CONFIGURATION & INIT
 # ==========================================
@@ -76,40 +76,39 @@ from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, No
 #extract_youtube_transcript
 def extract_youtube_transcript(video_url):
     try:
-        # Extract Video ID using Regex
+        # 1. Extract Video ID using Regex
         video_id_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", video_url)
         if not video_id_match:
             return "Error: Invalid YouTube URL"
         
         video_id = video_id_match.group(1)
         
-        # 1. Try to get available transcripts (Manual OR Auto-generated)
+        # 2. Fetch the list of ALL available transcripts (Manual + Auto-generated)
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        
+        # 3. Smart Selection Logic
+        # It tries to find English or Hindi (Manual or Auto)
+        # If it can't find exact matches, it defaults to the first available transcript
         try:
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-            
-            # 2. Try to fetch English or Hindi specifically
-            # This looks for 'en', 'en-US', 'hi' etc.
-            transcript = transcript_list.find_transcript(['en', 'en-US', 'en-GB', 'hi', 'hi-IN'])
-            
+            # Prioritize English and Hindi
+            transcript = transcript_list.find_transcript(['en', 'hi', 'en-US', 'hi-IN'])
         except:
-            # 3. If specific language not found, just get the first available one (Fallback)
-            try:
-                transcript = next(iter(transcript_list))
-            except:
-                return "Error: No transcripts found. This video likely has no captions (CC) enabled."
+            # FALLBACK: If specific languages aren't found, just get ANY available transcript
+            # This allows it to work even if the video is in a different language or uses weird codes
+            transcript = next(iter(transcript_list))
 
         # 4. Fetch the actual text
-        fetched_transcript = transcript.fetch()
-        transcript_text = " ".join([i['text'] for i in fetched_transcript])
-        return transcript_text
+        transcript_data = transcript.fetch()
+        full_text = " ".join([entry['text'] for entry in transcript_data])
+        
+        return full_text
 
     except TranscriptsDisabled:
-        return "Error: Subtitles are disabled for this video."
+        return "Error: Subtitles are completely disabled for this video."
     except NoTranscriptFound:
-        return "Error: No subtitles found for this video."
+        return "Error: No subtitles (manual or auto) found. Try a different video."
     except Exception as e:
         return f"Error: {str(e)}"
-
 
 def ask_ai(prompt, system_role="You are a helpful AI tutor."):
     try:
@@ -398,38 +397,64 @@ def render_youtube_summary():
 
 # --- UPDATED SUMMARY WITH PDF UPLOAD ---
 def render_summary():
-    st.header("📝 Summarize Notes")
+    st.header("📝 Summarize Content")
     
-    tab1, tab2 = st.tabs(["✍️ Paste Text", "📂 Upload PDF"])
+    tab1, tab2, tab3 = st.tabs(["✍️ Paste Text", "📂 Upload PDF", "📺 YouTube Video"])
     
-    notes_text = ""
+    content_to_summarize = ""
 
+    # Tab 1: Paste Text
     with tab1:
         text_input = st.text_area("Paste your notes here", height=200)
         if text_input:
-            notes_text = text_input
+            content_to_summarize = text_input
 
+    # Tab 2: Upload PDF
     with tab2:
         uploaded_file = st.file_uploader("Upload PDF Notes", type=['pdf'])
         if uploaded_file is not None:
             extracted_text = extract_text_from_pdf(uploaded_file)
             if extracted_text:
                 st.success("PDF Loaded Successfully!")
-                with st.expander("View Extracted Text"):
-                    st.write(extracted_text[:1000] + "...") # Preview
-                notes_text = extracted_text
+                content_to_summarize = extracted_text
             else:
                 st.error("Could not extract text from PDF.")
 
+    # Tab 3: YouTube (UPDATED)
+    with tab3:
+        st.info("Supported: English & Hindi videos (Manual or Auto-captions)")
+        yt_url = st.text_input("Enter YouTube Video URL")
+        
+        if st.button("Fetch Transcript"):
+            if yt_url:
+                with st.spinner("Searching for captions (including auto-generated)..."):
+                    transcript = extract_youtube_transcript(yt_url)
+                    
+                    if "Error:" in transcript:
+                        st.error(transcript)
+                    else:
+                        st.success("Transcript loaded!")
+                        # Store in session state so it doesn't vanish on re-run
+                        st.session_state['temp_transcript'] = transcript
+                        with st.expander("View Transcript"):
+                            st.write(transcript[:1000] + "...")
+            else:
+                st.warning("Please enter a URL first.")
+
+        # Check if we have a transcript stored from the button click above
+        if 'temp_transcript' in st.session_state:
+            content_to_summarize = st.session_state['temp_transcript']
+
+    # Generate Summary Button (Works for all 3 tabs)
     if st.button("Generate Summary"):
-        if notes_text:
-            with st.spinner("AI is analyzing your notes..."):
-                # Limit text to prevent token errors (approx 4000 chars)
-                summary = ask_ai(f"Summarize these notes in structured bullet points:\n{notes_text[:12000]}")
+        if content_to_summarize:
+            with st.spinner("AI is analyzing content..."):
+                # We limit to 12,000 chars to avoid breaking the AI limit
+                summary = ask_ai(f"Summarize this content (which may be in Hindi or English) into structured English bullet points:\n{content_to_summarize[:12000]}")
                 st.markdown(summary)
                 add_xp(15, "Summary")
         else:
-            st.warning("Please paste text or upload a PDF first.")
+            st.warning("Please provide content (Text, PDF, or Video) first.")
 
 def render_exam_mode():
     st.header("⏱️ Exam Mode")
