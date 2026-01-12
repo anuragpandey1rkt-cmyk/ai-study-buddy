@@ -8,6 +8,32 @@ import time
 import datetime
 from groq import Groq
 
+# -------------------------------
+# SESSION STATE INITIALIZATION
+# -------------------------------
+
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+
+if "xp" not in st.session_state:
+    st.session_state.xp = 0
+
+if "streak" not in st.session_state:
+    st.session_state.streak = 0
+
+if "study_log" not in st.session_state:
+    st.session_state.study_log = []
+
+if "weekly_activity_count" not in st.session_state:
+    st.session_state.weekly_activity_count = 0
+
+if "weekly_reward_claimed" not in st.session_state:
+    st.session_state.weekly_reward_claimed = False
+
+
 st.markdown("""
 <style>
 button {
@@ -52,18 +78,27 @@ if user and user.user:
 # ==============================
 # XP & ACTIVITY HELPERS
 # ==============================
+def save_progress(minutes: int):
+    if st.session_state.user_id is None:
+        return  # 🚫 prevents crash
+
+    today = str(datetime.date.today())
+
+    supabase.table("study_logs").insert({
+        "user_id": st.session_state.user_id,
+        "date": today,
+        "minutes": minutes
+    }).execute()
 
 def add_xp(points: int):
-    if "user" not in st.session_state or st.session_state.user is None:
-        return
+    if st.session_state.user_id is None:
+        return  # 🚫 prevents crash
 
-    user_id = st.session_state.user.id
+    user_id = st.session_state.user_id
 
-    # fetch current XP
     res = supabase.table("user_stats").select("*").eq("user_id", user_id).execute()
 
     if not res.data:
-        # create stats row if not exists
         supabase.table("user_stats").insert({
             "user_id": user_id,
             "xp": points,
@@ -76,12 +111,14 @@ def add_xp(points: int):
             "xp": current_xp + points
         }).eq("user_id", user_id).execute()
 
+    st.session_state.xp += points
 
-def register_activity(points: int = 25):
-    """
-    Call this whenever user completes an activity
-    """
-    add_xp(points)
+def register_activity():
+    if st.session_state.user_id is None:
+        return  # 🚫 DO NOTHING if not logged in
+
+    st.session_state.weekly_activity_count += 1
+    save_progress(minutes=0)
 
 #helper functions
 def save_study(user_id, minutes):
@@ -263,7 +300,8 @@ if "user" not in st.session_state:
     st.session_state.user = None
     
 # ---------- USER IS AUTHENTICATED ---------
-user_id = st.session_state.user.id
+user_id = st.session_state.user_id
+
 
 # ---------------- SESSION STATE INIT ----------------
 
@@ -551,12 +589,13 @@ if st.session_state.feature == "🏠 Home":
     st.subheader("🏆 Weekly Challenge")
 
     if st.button("Complete Weekly Challenge"):
-        if complete_weekly_challenge(user_id):
-            st.success("🎉 Weekly Challenge Completed! +100 XP")
+        if st.session_state.user_id is None:
+            st.warning("Login required")
+        elif st.session_state.weekly_activity_count >= 3:
+            add_xp(100)
+            st.success("🏆 Weekly Challenge Completed! +100 XP")
         else:
-            st.info("✅ Already completed this week")
-
-    
+            st.info("Complete 3 activities to unlock reward")
 
 
     st.markdown("<h1 style='text-align:center'>📘 AI Study Buddy</h1>", unsafe_allow_html=True)
@@ -616,9 +655,14 @@ elif st.session_state.feature == "❓ Quiz Generator":
             "Format exactly:\nQ:...\nA)...\nB)...\nC)...\nD)...\nCorrect:A"
         )
         st.session_state.quiz = text.split("Q:")
-        register_activity()
-        animate_xp_gain(25)
-        st.session_state.weekly_activity_count += 1
+    if st.button("Quiz Generator"):
+        if st.session_state.user_id is None:
+            st.warning("Please login to track progress")
+        else:
+            if "quiz_generated" not in st.session_state:
+                st.session_state.quiz_generated = True
+                register_activity()
+                add_xp(25)
 
     for i, q in enumerate(st.session_state.quiz):
         if not q.strip():
@@ -642,6 +686,8 @@ elif st.session_state.feature == "❓ Quiz Generator":
         save_study(user_id, minutes=25)
         st.success("Study saved! XP updated 🔥")
 
+    if st.button("New Topic"):
+        st.session_state.pop("quiz_generated", None)
 
 
 # ==================================================
