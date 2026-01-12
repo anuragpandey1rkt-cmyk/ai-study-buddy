@@ -121,6 +121,7 @@ def register_activity():
     save_progress(minutes=0)
 
 #helper functions
+
 def save_study(user_id, minutes):
     today = str(datetime.date.today())
 
@@ -192,11 +193,22 @@ def login(email, password):
             "email": email,
             "password": password
         })
-        st.session_state.user = res.user
-        st.success("Logged in successfully!")
+
+        user = res.user
+
+        # ✅ SET SESSION
+        st.session_state.user = user
+        st.session_state.user_id = user.id
+
+        # ✅ CREATE user_stats ROW (THIS WAS MISSING)
+        ensure_user_stats(user.id)
+
+        st.success("Logged in successfully")
         st.rerun()
+
     except Exception:
         st.error("Invalid email or password")
+
 def logout():
     supabase.auth.sign_out()
     st.session_state.user = None
