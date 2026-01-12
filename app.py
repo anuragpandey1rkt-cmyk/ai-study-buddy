@@ -557,15 +557,19 @@ with st.sidebar:
 # ==================================================
     
 if st.session_state.feature == "🏠 Home":
-    if st.session_state.user_id is None:
-        st.info("Please login to see your stats")
-        st.stop()
+    
+    user_id = st.session_state.user_id  # ✅ always use session state
 
-    res = supabase.table("user_stats").select("*").eq("st.session_state.user_id", user_id).execute()
+    res = supabase.table("user_stats").select("*").eq(
+        "user_id", user_id
+    ).execute()
 
-    if not res.data:
+    if res.data:
+        stats = res.data[0]
+    else:
+        # ✅ create stats row if missing
         supabase.table("user_stats").insert({
-            "user_id": st.session_state.user_id,
+            "user_id": user_id,
             "xp": 0,
             "streak": 0,
             "last_study_date": str(datetime.date.today())
@@ -575,8 +579,7 @@ if st.session_state.feature == "🏠 Home":
             "xp": 0,
             "streak": 0
         }
-    else:
-        stats = res.data[0]
+
 
     st.metric("⭐ XP", stats["xp"])
     st.metric("🔥 Streak", stats["streak"])
