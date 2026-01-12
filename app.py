@@ -364,22 +364,96 @@ def render_exam_mode():
         st.markdown(ask_ai(f"Give me a hard exam question about {topic}."))
 
 def render_chat():
-    st.header("💬 Chat with AI")
+    st.header("💬 Chat with AI ( & Documents)")
+
+    # --- PDF UPLOADER SECTION ---
+    with st.expander("📂 Upload a PDF to chat with", expanded=False):
+        uploaded_file = st.file_uploader("Upload your PDF here", type=['pdf'], key="chat_pdf_uploader")
+        
+        if uploaded_file:
+            # Check if we already processed this specific file to avoid re-processing on every click
+            if "current_pdf_name" not in st.session_state or st.session_state.current_pdf_name != uploaded_file.name:
+                with st.spinner("Reading PDF..."):
+                    text = extract_text_from_pdf(uploaded_file)
+                    if text:
+                        st.session_state.chat_pdf_content = text
+                        st.session_state.current_pdf_name = uploaded_file.name
+                        st.success("PDF Loaded! The AI can now read this document.")
+                    else:
+                        st.error("Could not read the PDF.")
+        
+        # Clear button
+        if "chat_pdf_content" in st.session_state and st.button("Clear PDF Context"):
+            del st.session_state.chat_pdf_content
+            del st.session_state.current_pdf_name
+            st.rerun()
+
+    # Show active context indicator
+    if "chat_pdf_content" in st.session_state:
+        st.caption(f"✅ Context Active: {st.session_state.current_pdf_name}")
+
+    # --- CHAT INTERFACE ---
+    # 1. Display Chat History
     for msg in st.session_state.chat_history:
         st.chat_message(msg['role']).write(msg['content'])
         
-    if user_input := st.chat_input("Ask your AI Tutor..."):
+    # 2. User Input
+    if user_input := st.chat_input("Ask about your PDF or general topics..."):
+        # Add User Message to History
         st.session_state.chat_history.append({"role": "user", "content": user_input})
         st.chat_message("user").write(user_input)
-        response = ask_ai(user_input)
-        st.session_state.chat_history.append({"role": "assistant", "content": response})
-        st.chat_message("assistant").write(response)
+        
+        # 3. Construct System Prompt with PDF Context (if available)
+        system_prompt = "You are a helpful AI Study Buddy."
+        
+        if "chat_pdf_content" in st.session_state:
+            # We truncate to ~15,000 characters to prevent crashing the AI with too much text
+            pdf_context = st.session_state.chat_pdf_content[:15000]
+            system_prompt += (
+                f"\n\nUSER HAS UPLOADED A PDF. HERE IS THE CONTENT:\n"
+                f"{pdf_context}\n\n"
+                f"INSTRUCTION: Answer the user's question. If the answer is in the PDF, use it. "
+                f"If not, use your general knowledge."
+            )
+
+        # 4. Get AI Response
+        with st.spinner("Thinking..."):
+            response = ask_ai(user_input, system_role=system_prompt)
+            
+            # Add AI Message to History
+            st.session_state.chat_history.append({"role": "assistant", "content": response})
+            st.chat_message("assistant").write(response)
 def render_roadmap():
     st.header("🗺️ Study Roadmap")
-    goal = st.text_input("What is your goal? (e.g., Learn Python in 30 days)")
-    if st.button("Create Roadmap"):
-        st.markdown(ask_ai(f"Create a week-by-week roadmap for: {goal}"))
-        add_xp(30, "Roadmap Created")
+    
+    # Create two columns for a better layout
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        topic = st.text_input("What do you want to learn?", placeholder="e.g., Python, Calculus, World History")
+    
+    with col2:
+        days = st.number_input("Duration (Days)", min_value=1, max_value=365, value=30)
+        
+    if st.button("Generate Roadmap"):
+        if topic:
+            with st.spinner(f"Planning your {days}-day journey for {topic}..."):
+                # specific prompt to force the AI to respect the day count
+                prompt = (
+                    f"Create a detailed, step-by-step study roadmap for learning '{topic}' in exactly {days} days. "
+                    f"Divide the plan logically (e.g., Week 1, Week 2, or Day 1-5). "
+                    f"For each section, include: \n"
+                    f"1. Key Topics to cover \n"
+                    f"2. Practical Exercises or Projects \n"
+                    f"3. Resources to look for. \n"
+                    f"Make the tone motivating and structured."
+                )
+                
+                roadmap = ask_ai(prompt)
+                st.markdown(roadmap)
+                add_xp(30, "Roadmap Created")
+        else:
+            st.warning("Please enter a topic to start.")
 
 # ==========================================
 # ⏳ UPGRADED STUDY SESSION (Pomodoro Style)
