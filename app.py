@@ -317,25 +317,136 @@ def render_roadmap():
         st.markdown(ask_ai(f"Create a week-by-week roadmap for: {goal}"))
         add_xp(30, "Roadmap Created")
 
+# ==========================================
+# ⏳ UPGRADED STUDY SESSION (Pomodoro Style)
+# ==========================================
 def render_study_session():
-    st.header("⏳ Focus Timer")
-    minutes = st.number_input("Minutes", 1, 120, 25)
-    
-    if st.button("Start Timer"):
-        st.session_state.study_timer_active = True
-        st.session_state.study_start_time = time.time()
-        
-    if st.session_state.study_timer_active:
-        elapsed = time.time() - st.session_state.study_start_time
-        remaining = (minutes * 60) - elapsed
-        if remaining > 0:
-            st.metric("Time Remaining", f"{int(remaining // 60)}:{int(remaining % 60):02d}")
-            time.sleep(1)
+    st.header("⏳ Smart Focus Timer")
+
+    # --- 1. SETTINGS INPUTS ---
+    # We use columns to make it look professional
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        focus_min = st.number_input("Focus Duration (min)", min_value=1, max_value=120, value=25)
+    with c2:
+        break_min = st.number_input("Break Duration (min)", min_value=1, max_value=30, value=5)
+    with c3:
+        total_cycles = st.number_input("Cycles (Rounds)", min_value=1, max_value=10, value=4)
+
+    # Task Input
+    task_goal = st.text_input("🎯 What are you working on?", placeholder="e.g., Chapter 4 Math Problems")
+
+    # --- 2. SESSION STATE SETUP ---
+    # We need a dictionary to track the complex state of cycles/breaks
+    if "timer_state" not in st.session_state:
+        st.session_state.timer_state = {
+            "active": False,
+            "mode": "Focus",  # Can be "Focus" or "Break"
+            "cycles_completed": 0,
+            "end_time": None,
+            "duration": 0
+        }
+
+    # --- 3. START / RESET BUTTONS ---
+    col_start, col_reset = st.columns([1, 4])
+    with col_start:
+        # Start Button
+        if not st.session_state.timer_state["active"]:
+            if st.button("▶️ Start", type="primary"):
+                if not task_goal:
+                    st.warning("⚠️ Please enter a goal first!")
+                else:
+                    # Initialize the Timer
+                    st.session_state.timer_state["active"] = True
+                    st.session_state.timer_state["mode"] = "Focus"
+                    st.session_state.timer_state["cycles_completed"] = 0
+                    st.session_state.timer_state["duration"] = focus_min * 60
+                    st.session_state.timer_state["end_time"] = time.time() + (focus_min * 60)
+                    st.rerun()
+    with col_reset:
+        # Stop Button
+        if st.button("⏹️ Reset"):
+            st.session_state.timer_state["active"] = False
             st.rerun()
+
+    # --- 4. TIMER LOGIC (Runs only if active) ---
+    if st.session_state.timer_state["active"]:
+        
+        # Calculate Remaining Time
+        remaining = st.session_state.timer_state["end_time"] - time.time()
+        
+        # --- DISPLAY UI ---
+        mode = st.session_state.timer_state["mode"]
+        current_round = st.session_state.timer_state['cycles_completed'] + 1
+        
+        # Dynamic Header (Green for Focus, Blue for Break)
+        if mode == "Focus":
+            st.markdown(f"### 🧠 Focus Cycle: {current_round} / {total_cycles}")
+            color = "#2e86c1" # Blue
         else:
-            st.success("Time's up!")
-            st.session_state.study_timer_active = False
-            add_xp(minutes, "Study Session")
+            st.markdown(f"### ☕ Break Time!")
+            color = "#28b463" # Green
+
+        # Big Timer Display
+        mins = int(max(0, remaining) // 60)
+        secs = int(max(0, remaining) % 60)
+        
+        st.markdown(f"""
+        <div style="text-align: center;">
+            <h1 style="font-size: 80px; color: {color}; margin: 0;">
+                {mins:02d}:{secs:02d}
+            </h1>
+            <p style="font-size: 20px; color: gray;">{mode} Mode</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Progress Bar
+        total_duration = st.session_state.timer_state["duration"]
+        progress = max(0.0, min(1.0, 1 - (remaining / total_duration)))
+        st.progress(progress)
+
+        # --- TIMER FINISHED LOGIC ---
+        if remaining <= 0:
+            # 🔔 PLAY ALARM SOUND
+            st.markdown("""
+                <audio autoplay>
+                <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
+                </audio>
+                """, unsafe_allow_html=True)
+
+            if mode == "Focus":
+                # FOCUS ENDED -> Log XP & Switch to Break
+                add_xp(focus_min, f"Studied: {task_goal}")
+                
+                # Check if all cycles are done
+                if current_round >= total_cycles:
+                    st.success("🎉 Session Complete! You crushed it!")
+                    st.balloons()
+                    st.session_state.timer_state["active"] = False
+                    time.sleep(4) # Wait for sound/balloons
+                    st.rerun()
+                else:
+                    # Switch to Break
+                    st.toast("☕ Time for a break!")
+                    st.session_state.timer_state["mode"] = "Break"
+                    st.session_state.timer_state["duration"] = break_min * 60
+                    st.session_state.timer_state["end_time"] = time.time() + (break_min * 60)
+                    time.sleep(2)
+                    st.rerun()
+            
+            else:
+                # BREAK ENDED -> Switch back to Focus
+                st.toast("🧠 Break over! Back to work.")
+                st.session_state.timer_state["cycles_completed"] += 1
+                st.session_state.timer_state["mode"] = "Focus"
+                st.session_state.timer_state["duration"] = focus_min * 60
+                st.session_state.timer_state["end_time"] = time.time() + (focus_min * 60)
+                time.sleep(2)
+                st.rerun()
+        
+        # Refresh every second to update the timer UI
+        time.sleep(1)
+        st.rerun()
 
 def render_gamification():
     st.header("🎮 Gamification Dashboard")
