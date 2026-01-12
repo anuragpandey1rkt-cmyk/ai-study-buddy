@@ -247,6 +247,56 @@ def render_flashcards():
     if "flashcards" in st.session_state:
         st.markdown(st.session_state.flashcards)
 
+
+def render_mindmap():
+    st.header("🧠 AI Mind Map Generator")
+    topic = st.text_input("Enter a complex topic (e.g., Photosynthesis, World War II)")
+    
+    if st.button("Generate Mind Map"):
+        with st.spinner("Drawing diagram..."):
+            # Ask AI to generate Graphviz DOT code
+            prompt = (f"Create a comprehensive mind map for '{topic}' using Graphviz DOT language. "
+                      "Keep labels concise. Output ONLY the DOT code inside a code block. "
+                      "Start with 'digraph G {'.")
+            dot_code = ask_ai(prompt, system_role="You are a Graphviz expert.")
+            
+            # Clean up response to get pure DOT code
+            if "```" in dot_code:
+                dot_code = dot_code.split("```")[1]
+                if dot_code.startswith("dot"): dot_code = dot_code[3:]
+            
+            try:
+                st.graphviz_chart(dot_code)
+                add_xp(20, "Mind Map Created")
+            except Exception:
+                st.error("Could not render the diagram. Please try a simpler topic.")
+def render_leaderboard():
+    st.header("🏆 Global Leaderboard")
+    
+    # Fetch top 10 users by XP
+    try:
+        response = supabase.table("user_stats").select("*").order("xp", desc=True).limit(10).execute()
+        data = response.data
+        
+        if data:
+            st.write("See where you stand among other students!")
+            
+            # Create a nice table
+            leaderboard_data = []
+            for rank, student in enumerate(data):
+                # Mask email for privacy (e.g., a***@gmail.com)
+                user_id = student['user_id'] 
+                xp = student['xp']
+                level = student.get('level', 'Beginner')
+                leaderboard_data.append({"Rank": rank+1, "Level": level, "XP": xp})
+                
+            st.dataframe(leaderboard_data, use_container_width=True)
+        else:
+            st.info("No data yet. Be the first to earn XP!")
+            
+    except Exception as e:
+        st.error(f"Could not load leaderboard: {e}")
+        
 def render_explain_topic():
     st.header("📘 Explain Topic")
     topic = st.text_input("Enter Topic")
@@ -557,11 +607,14 @@ def main():
     f = st.session_state.feature
     if f == "🏠 Home": render_home()
     elif f == "🎮 Gamification Dashboard": render_gamification()
+    elif f == "🏆 Leaderboard": render_leaderboard()    
     elif f == "🎯 Daily Challenge": render_daily_challenge()
     elif f == "📈 Weekly Progress": render_weekly_progress()
     elif f == "📘 Explain Topic": render_explain_topic()
+    elif f == "🧠 Mind Maps": render_mindmap()    
     elif f == "📝 Summarize Notes": render_summary()
     elif f == "❓ Quiz Generator": render_quiz()
+    elif f == "⏳ Study Session": render_study_session()    
     elif f == "🧠 Self Assessment": render_self_assessment()
     elif f == "⏱️ Exam Mode": render_exam_mode()
     elif f == "📚 Flashcards": render_flashcards()
@@ -570,7 +623,6 @@ def main():
     elif f == "💼 Career Connection": render_career()
     elif f == "❌ Mistake Explainer": render_mistake_explainer()
     elif f == "💬 Chat with AI": render_chat()
-    elif f == "⏳ Study Session": render_study_session()
     elif f == "📊 Progress Tracker": render_progress_tracker()
     elif f == "🗺️ Study Roadmap": render_roadmap()
 
