@@ -33,8 +33,7 @@ load_dotenv()
 
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-#to get user_id
-user_id = st.session_state.user.id
+
 #helper functions
 def save_study(user_id, minutes):
     today = str(datetime.date.today())
@@ -189,8 +188,8 @@ if st.session_state.user is None:
             signup(email, password)
 
     st.stop()
-
-
+# ---------- USER IS AUTHENTICATED ---------
+user_id = st.session_state.user.id
 
 # ---------------- SESSION STATE INIT ----------------
 
