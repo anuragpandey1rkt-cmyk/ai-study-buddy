@@ -790,26 +790,41 @@ elif st.session_state.feature == "⏱️ Exam Mode":
 # ==================================================
 # ⏳ STUDY SESSION (CUSTOM)
 # ==================================================
-elif st.session_state.feature == "⏳ Study Session":
-    st.header("⏳ Study Session")
+elif st.session_state.feature == "📚 Study Session":
+
+    require_login()  # ⛔ HARD GATE — prevents all crashes
+
+    st.header("📚 Study Session")
+
     study = st.number_input("Study minutes", 1, 120, 25)
     brk = st.number_input("Break minutes", 1, 60, 5)
     cycles = st.number_input("Cycles", 1, 10, 2)
 
-    if st.button("Start Session"):
-        total_minutes = study * cycles
+    # Start session
+    if st.button("▶ Start Study Session"):
+        st.session_state.study_started = True
 
-        st.success("Session Completed 🎉")
-        st.session_state.last_study_date = datetime.date.today()
-        st.session_state.weekly_activity_count += 1
+    # Session running
+    if st.session_state.get("study_started"):
+        st.info("📖 Studying... Focus mode ON")
 
-        register_activity()
-        save_progress(total_minutes)
-    if st.button("✅ Finish Study"):
-        save_study(user_id, minutes=25)
-        st.success("Study saved! XP updated 🔥")
+        if st.button("✅ End Study Session"):
+            total_minutes = study * cycles
 
-    
+            save_study(
+                st.session_state.user_id,
+                minutes=total_minutes
+            )
+
+            add_xp(25)
+            register_activity()
+
+            st.session_state.weekly_activity_count += 1
+            st.session_state.last_study_date = datetime.date.today()
+
+            st.session_state.study_started = False
+            st.success("Session saved! XP updated 🔥")
+
 
 
 # ==================================================
