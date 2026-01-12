@@ -196,7 +196,22 @@ if st.session_state.user is None:
         password = st.text_input("Password", type="password", key="login_password")
         if st.button("Login"):
             login(email, password)
+    st.divider()
+    st.subheader("🔁 Forgot Password")
 
+    reset_email = st.text_input("Enter your registered email", key="reset_email")
+
+    if st.button("Send Password Reset Link"):
+        try:
+           supabase.auth.reset_password_for_email(
+            reset_email,
+            options={
+                "redirect_to": "https://ai-study-buddy-student.streamlit.app"
+            }
+            )
+            st.success("Password reset email sent. Check your inbox.")
+         except Exception as e:
+             st.error("Failed to send reset email")
     with tab2:
         email = st.text_input("Email", key="signup_email")
         password = st.text_input("Password", type="password", key="signup_password")
@@ -204,22 +219,7 @@ if st.session_state.user is None:
             signup(email, password)
 
     st.stop()
-st.divider()
-st.subheader("🔁 Forgot Password")
 
-reset_email = st.text_input("Enter your registered email", key="reset_email")
-
-if st.button("Send Password Reset Link"):
-    try:
-        supabase.auth.reset_password_for_email(
-            reset_email,
-            options={
-                "redirect_to": "https://ai-study-buddy-student.streamlit.app"
-            }
-        )
-        st.success("Password reset email sent. Check your inbox.")
-    except Exception as e:
-        st.error("Failed to send reset email")
     
 # ---------- USER IS AUTHENTICATED ---------
 user_id = st.session_state.user.id
