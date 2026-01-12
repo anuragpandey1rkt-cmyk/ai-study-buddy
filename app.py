@@ -7,6 +7,7 @@ from supabase import create_client
 from groq import Groq
 from PyPDF2 import PdfReader
 import graphviz
+from youtube_transcript_api import YouTubeTranscriptApi
 # ==========================================
 # 1. CONFIGURATION & INIT
 # ==========================================
@@ -322,6 +323,24 @@ def render_explain_topic():
         st.markdown(res)
         add_xp(15, "Explanation")
 
+def render_youtube_summary():
+    st.header("📺 YouTube Summarizer")
+    url = st.text_input("Paste YouTube Link")
+    
+    if st.button("Summarize Video"):
+        try:
+            with st.spinner("Watching video for you..."):
+                video_id = url.split("v=")[1].split("&")[0]
+                transcript = YouTubeTranscriptApi.get_transcript(video_id)
+                full_text = " ".join([i['text'] for i in transcript])
+                
+                # Summarize the transcript
+                summary = ask_ai(f"Summarize this video transcript in detailed bullet points:\n{full_text[:10000]}")
+                st.markdown(summary)
+                add_xp(20, "Video Watched")
+        except Exception as e:
+            st.error("Could not retrieve transcript. (Video might not have captions).")
+            
 # --- UPDATED SUMMARY WITH PDF UPLOAD ---
 def render_summary():
     st.header("📝 Summarize Notes")
@@ -596,11 +615,11 @@ def main():
         
         # FEATURE LIST
         features = [
-            "🏠 Home", "🎮 Gamification Dashboard","🏆 Leaderboard", "🎯 Daily Challenge", "📈 Weekly Progress",
+            "🏠 Home","📺 YouTube Summarizer","💬 Chat with AI", "🎮 Gamification Dashboard","🏆 Leaderboard", "🎯 Daily Challenge", "📈 Weekly Progress",
             "📘 Explain Topic", "📝 Summarize Notes", "❓ Quiz Generator","🧠 Mind Maps",
-            "⏱️ Exam Mode", "📚 Flashcards","🧠 Self Assessment", "🔁 Revision Mode", "🎯 Learning Outcomes",
-            "💼 Career Connection", "❌ Mistake Explainer", "💬 Chat with AI",
-            "⏳ Study Session", "📊 Progress Tracker", "🗺️ Study Roadmap"
+            "⏱️ Exam Mode","⏳ Study Session", "📚 Flashcards","🧠 Self Assessment", "🔁 Revision Mode", "🎯 Learning Outcomes",
+            "💼 Career Connection", "❌ Mistake Explainer", 
+             "📊 Progress Tracker", "🗺️ Study Roadmap"
         ]
         
         # Iterate to create buttons
@@ -621,7 +640,8 @@ def main():
     # ROUTING
     f = st.session_state.feature
     if f == "🏠 Home": render_home()
-    elif f == "🎮 Gamification Dashboard": render_gamification()
+    elif f == "📺 YouTube Summarizer": render_youtube_summary()
+    elif f == "🧠 Mind Map": render_mind_map()    
     elif f == "🏆 Leaderboard": render_leaderboard()    
     elif f == "🎯 Daily Challenge": render_daily_challenge()
     elif f == "📈 Weekly Progress": render_weekly_progress()
