@@ -698,8 +698,48 @@ def render_daily_challenge():
 
 def render_weekly_progress():
     st.header("📈 Weekly Progress")
-    st.bar_chart({"Mon": 10, "Tue": 20, "Wed": 15}) # Placeholder data for visualization
+    
+    # Check if user is logged in
+    if not st.session_state.user_id:
+        st.warning("Please login to view your progress.")
+        return
 
+    try:
+        # 1. Fetch logs from Supabase for the current user
+        # We fetch date and minutes columns
+        response = supabase.table("study_logs").select("date, minutes").eq("user_id", st.session_state.user_id).execute()
+        logs = response.data
+
+        if logs:
+            # 2. Process Data: Aggregate minutes by date
+            # (Because you might have studied 2 times on the same day, we need to sum them up)
+            daily_stats = {}
+            for entry in logs:
+                date_str = entry['date']
+                minutes = entry['minutes']
+                
+                if date_str in daily_stats:
+                    daily_stats[date_str] += minutes
+                else:
+                    daily_stats[date_str] = minutes
+
+            # 3. Display the Chart
+            st.write("### Your Study Minutes per Day")
+            st.bar_chart(daily_stats)
+            
+            # 4. Display Summary Metrics
+            total_minutes = sum(daily_stats.values())
+            avg_minutes = int(total_minutes / len(daily_stats)) if len(daily_stats) > 0 else 0
+            
+            col1, col2 = st.columns(2)
+            col1.metric("Total Study Time", f"{total_minutes} mins")
+            col2.metric("Average per Active Day", f"{avg_minutes} mins")
+
+        else:
+            st.info("No study records found yet. Start a 'Study Session' or 'Quiz' to see data here!")
+            
+    except Exception as e:
+        st.error(f"Error loading progress: {str(e)}")
 def render_progress_tracker():
     st.header("📊 Progress Tracker")
     st.write(f"XP: {st.session_state.xp}")
