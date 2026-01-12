@@ -7,6 +7,9 @@ from supabase import create_client
 import os
 from dotenv import load_dotenv
 
+st.write("SUPABASE_URL exists:", bool(os.getenv("SUPABASE_URL")))
+st.write("SUPABASE_ANON_KEY exists:", bool(os.getenv("SUPABASE_KEY")))
+
 if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_KEY"):
     st.error("Supabase credentials not found. Check Streamlit Secrets.")
     st.stop()
@@ -28,7 +31,7 @@ button {
 
 supabase = create_client(
     os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_ANON_KEY")
+    os.getenv("SUPABASE_KEY")
 )
 
 app = FastAPI()
