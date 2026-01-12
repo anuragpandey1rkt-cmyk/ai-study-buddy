@@ -557,7 +557,22 @@ with st.sidebar:
 # ==================================================
     
 if st.session_state.feature == "🏠 Home":
-    stats = supabase.table("user_stats").select("*").eq("user_id", user_id).execute().data[0]
+    res = supabase.table("user_stats").select("*").eq("user_id", user_id).execute()
+
+    if not res.data:
+        supabase.table("user_stats").insert({
+            "user_id": user_id,
+            "xp": 0,
+            "streak": 0,
+            "last_study_date": str(datetime.date.today())
+        }).execute()
+
+        stats = {
+            "xp": 0,
+            "streak": 0
+        }
+    else:
+        stats = res.data[0]
 
     st.metric("⭐ XP", stats["xp"])
     st.metric("🔥 Streak", stats["streak"])
