@@ -4,4 +4,3 @@ supabase
 python-dotenv
 PyPDF2
 graphviz
-youtube-transcript-api
