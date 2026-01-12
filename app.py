@@ -49,6 +49,39 @@ if user and user.user:
         else:
             supabase.auth.update_user({"password": new_pass})
             st.success("Password updated successfully")
+# ==============================
+# XP & ACTIVITY HELPERS
+# ==============================
+
+def add_xp(points: int):
+    if "user" not in st.session_state or st.session_state.user is None:
+        return
+
+    user_id = st.session_state.user.id
+
+    # fetch current XP
+    res = supabase.table("user_stats").select("*").eq("user_id", user_id).execute()
+
+    if not res.data:
+        # create stats row if not exists
+        supabase.table("user_stats").insert({
+            "user_id": user_id,
+            "xp": points,
+            "streak": 1,
+            "last_study_date": str(datetime.date.today())
+        }).execute()
+    else:
+        current_xp = res.data[0]["xp"]
+        supabase.table("user_stats").update({
+            "xp": current_xp + points
+        }).eq("user_id", user_id).execute()
+
+
+def register_activity(points: int = 25):
+    """
+    Call this whenever user completes an activity
+    """
+    add_xp(points)
 
 #helper functions
 def save_study(user_id, minutes):
@@ -364,7 +397,7 @@ def check_daily_challenge():
     if st.session_state.last_study_date == today:
         if not st.session_state.daily_challenge_done:
             st.session_state.daily_challenge_done = True
-            add_xp(25)
+            register_activity()
             animate_xp_gain(25)
 
 # =============================
@@ -506,7 +539,7 @@ if st.session_state.feature == "🏠 Home":
          and not st.session_state.daily_challenge_done
         ):
         st.session_state.daily_challenge_done = True
-        add_xp(25)
+        register_activity()
         st.success("🎯 Daily Challenge Completed! +25 XP")
 
 
@@ -584,7 +617,6 @@ elif st.session_state.feature == "❓ Quiz Generator":
         )
         st.session_state.quiz = text.split("Q:")
         register_activity()
-        add_xp(25)
         animate_xp_gain(25)
         st.session_state.weekly_activity_count += 1
 
@@ -621,7 +653,7 @@ elif st.session_state.feature == "📚 Flashcards":
     if st.button("Generate Flashcards"):
         st.write(ai(f"Create 5 flashcards (Q&A) on {topic}"))
         st.session_state.last_study_date = datetime.date.today()
-        add_xp(25)
+        register_activity()
         animate_xp_gain(25)
         st.session_state.weekly_activity_count += 1
 
@@ -636,7 +668,6 @@ elif st.session_state.feature == "🔁 Revision Mode":
     st.header("🔁 Revision Mode")
     if st.button("Start Revision"):
         st.write(ai(f"Create revision notes with examples and mistakes for {topic}"))
-        add_xp(25)
         animate_xp_gain(25)
         st.session_state.weekly_activity_count += 1
         register_activity()
@@ -670,7 +701,6 @@ elif st.session_state.feature == "⏱️ Exam Mode":
     if st.button("Generate Answer"):
         st.write(ai(f"Write {exam_type} exam answer on {topic}"))
         st.session_state.last_study_date = datetime.date.today()
-        add_xp(25)
         animate_xp_gain(25)
         st.session_state.weekly_activity_count += 1
         register_activity()
@@ -693,7 +723,7 @@ elif st.session_state.feature == "⏳ Study Session":
         st.session_state.last_study_date = datetime.date.today()
         st.session_state.weekly_activity_count += 1
 
-        add_xp(25)
+        register_activity()
         save_progress(total_minutes)
     if st.button("✅ Finish Study"):
         save_study(user_id, minutes=25)
@@ -800,7 +830,6 @@ elif st.session_state.feature == "🧠 Self Assessment":
         )
         st.write(qs)
         st.session_state.last_study_date = datetime.date.today()
-        add_xp(25)
         animate_xp_gain(25)
         st.session_state.weekly_activity_count += 1
         register_activity()
@@ -856,7 +885,7 @@ elif st.session_state.feature == "🎯 Daily Challenge":
         and not st.session_state.daily_challenge_done
     ):
         st.session_state.daily_challenge_done = True
-        add_xp(25)
+        register_activity()
         animate_xp_gain(25)
 
         st.balloons()
