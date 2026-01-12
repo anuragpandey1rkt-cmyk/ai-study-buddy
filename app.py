@@ -17,14 +17,12 @@ def make_pwa_ready():
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
         
         <style>
-            /* Hide Streamlit's default top menu and footer for a clean app look */
-            #MainMenu {visibility: hidden;}
+            /* We ONLY hide the 'Manage App' footer, but we KEEP the Header so the sidebar button works */
             footer {visibility: hidden;}
-            header {visibility: hidden;}
             
-            /* Tweak padding for mobile screens */
+            /* Tweak padding for mobile screens so content doesn't get cut off */
             .block-container {
-                padding-top: 1rem !important;
+                padding-top: 3rem !important;
                 padding-bottom: 5rem !important;
             }
         </style>
