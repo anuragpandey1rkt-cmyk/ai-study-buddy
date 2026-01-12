@@ -413,19 +413,19 @@ if st.session_state.feature == "🏠 Home":
 # ===============================
 # 🎯 DAILY CHALLENGE (AUTO)
 # ===============================
-    today = datetime.date.today()
+     today = datetime.date.today()
 
-    if st.session_state.daily_challenge_date != today:
-        st.session_state.daily_challenge_done = False
-        st.session_state.daily_challenge_date = today
+     if st.session_state.daily_challenge_date != today:
+         st.session_state.daily_challenge_done = False
+         st.session_state.daily_challenge_date = today
 
-    if (
-        st.session_state.last_study_date == today
-        and not st.session_state.daily_challenge_done
-       ):
-       st.session_state.daily_challenge_done = True
-       add_xp(25)
-       st.success("🎯 Daily Challenge Completed! +25 XP")
+     if (
+         st.session_state.last_study_date == today
+         and not st.session_state.daily_challenge_done
+        ):
+        st.session_state.daily_challenge_done = True
+        add_xp(25)
+        st.success("🎯 Daily Challenge Completed! +25 XP")
 
 
 
