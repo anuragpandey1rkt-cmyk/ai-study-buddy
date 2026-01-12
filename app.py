@@ -204,9 +204,9 @@ if st.session_state.user is None:
     if st.button("Send Password Reset Link"):
         try:
            supabase.auth.reset_password_for_email(
-            reset_email,
-            options={
-                "redirect_to": "https://ai-study-buddy-student.streamlit.app"
+               reset_email,
+               options={
+                   "redirect_to": "https://ai-study-buddy-student.streamlit.app"
                 }
             )
             st.success("Password reset email sent. Check your inbox.")
