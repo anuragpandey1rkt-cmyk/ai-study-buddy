@@ -65,15 +65,26 @@ def auth():
         e = st.text_input("Email")
         p = st.text_input("Password", type="password")
         if st.button("Login"):
-            res = supabase.auth.sign_in_with_password({"email": e, "password": p})
-            if res.user:
-                st.session_state.user = res.user
-                st.session_state.user_id = res.user.id
-                ensure_user(res.user.id)
-                st.rerun()
-
+            if not email or not password:
+                st.warning("⚠️ Please enter both email and password")
             else:
-                st.error("Invalid credentials")
+                try:
+                    res = supabase.auth.sign_in_with_password({
+                        "email": email.strip(),
+                        "password": password
+                    })
+
+                    if res.user:
+                        st.session_state.user = res.user
+                        st.session_state.user_id = res.user.id
+
+                        ensure_user(res.user.id)   # creates user_stats row if missing
+                        st.success("✅ Logged in successfully")
+                        st.rerun()
+
+                except Exception as e:
+                    st.error("❌ Invalid email or password")
+
 
     with tab2:
         e = st.text_input("New Email")
