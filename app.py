@@ -1,8 +1,6 @@
 # ==================================================
 # 📘 AI STUDY BUDDY — FIXED & COMPLETE VERSION
 # ==================================================
-import requests
-BACKEND_URL = "https://ai-study-buddy-6bnl.onrender.com"
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -16,6 +14,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+from dotenv import load_dotenv
+load_dotenv()
+
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+def save_study(user_id, minutes):
+    supabase.table("study_logs").insert({
+        "user_id": user_id,
+        "date": str(datetime.date.today()),
+        "minutes": minutes
+    }).execute()
+
+
+from supabase import create_client
 import streamlit as st
 import time
 import datetime
@@ -23,33 +37,6 @@ import os
 from groq import Groq
 
 #helper functions
-def register_user(username):
-    res = requests.post(
-        f"{BACKEND_URL}/users",
-        json={"username": username}
-    )
-    return res.json()
-
-def save_progress(minutes):
-    st.session_state.study_log.append({
-        "date": datetime.date.today(),
-        "minutes": minutes,
-        "xp": st.session_state.xp,
-        "streak": st.session_state.streak
-    })
-
-def get_or_create_user():
-    if "user_id" not in st.session_state:
-        res = requests.post(
-            f"{BACKEND_URL}/users",
-            json={"username": "demo_user"}
-        )
-        st.session_state.user_id = res.json()["id"]
-
-def fetch_progress():
-    res = requests.get(f"{BACKEND_URL}/progress")
-    return res.json()
-
 def register_activity():
     today = datetime.date.today()
 
@@ -170,8 +157,18 @@ if "weekly_reward_claimed" not in st.session_state:
 # ===============================
 # 🎮 GAMIFICATION HELPERS
 # ===============================
-def add_xp(amount):
-    st.session_state.xp += amount
+def add_xp(user_id, xp, reason):
+    supabase.table("xp_logs").insert({
+        "user_id": user_id,
+        "xp": xp,
+        "reason": reason
+    }).execute()
+
+    supabase.rpc("increment_xp", {
+        "uid": user_id,
+        "xp": xp
+    }).execute()
+
 
 def get_level():
     xp = st.session_state.xp
@@ -445,7 +442,10 @@ elif st.session_state.feature == "❓ Quiz Generator":
             else:
                 st.error(f"Wrong ❌ (Correct: {correct})")
         st.session_state.last_study_date = datetime.date.today()
-    
+    if st.button("End Study Session"):
+       save_study(st.session_state.user_id, minutes_studied)
+       st.success("Study session saved 🎉")
+
 
 # ==================================================
 # 📚 FLASHCARDS
@@ -530,6 +530,9 @@ elif st.session_state.feature == "⏳ Study Session":
 
         add_xp(25)
         save_progress(total_minutes)
+    if st.button("End Study Session"):
+      save_study(st.session_state.user_id, minutes_studied)
+      st.success("Study session saved 🎉")
 
     
 
