@@ -682,19 +682,63 @@ def render_revision():
 
 def render_self_assessment():
     st.header("🧠 Self Assessment")
-    st.write("Rate your confidence (1-5) on your recent topics.")
-    st.slider("Confidence Level", 1, 5)
-    if st.button("Save Log"):
-        st.success("Logged!")
-        add_xp(5, "Self Reflection")
+    st.write("Reflect on your learning. How confident do you feel about what you studied today?")
+    
+    # Input
+    topic = st.text_input("What topic did you just finish?")
+    confidence = st.slider("Confidence Level", 1, 5, 3)
+    
+    if st.button("Save Assessment"):
+        if topic:
+            if st.session_state.user_id:
+                try:
+                    # Save to DB
+                    # We use 'activity_type' to store the details
+                    activity_note = f"Self Assessment: {confidence}/5 on '{topic}'"
+                    
+                    supabase.table("study_logs").insert({
+                        "user_id": st.session_state.user_id,
+                        "minutes": 5, # Award 5 mins of 'reflection time'
+                        "activity_type": activity_note,
+                        "date": str(datetime.date.today())
+                    }).execute()
+                    
+                    st.success("✅ Assessment Logged!")
+                    add_xp(10, "Self Reflection") # Real XP update
+                    
+                except Exception as e:
+                    st.error(f"Error saving: {e}")
+            else:
+                st.warning("Please login to save.")
+        else:
+            st.warning("Please enter the topic name first.")
 
 def render_daily_challenge():
     st.header("🎯 Daily Challenge")
-    st.info("Today's Challenge: Complete 1 Quiz and Study for 20 mins.")
-    if st.session_state.xp > 20: # Mock logic
-        st.success("Challenge Completed! (+50 XP)")
+    
+    # 1. Get Today's Date
+    today = str(datetime.date.today())
+    
+    # 2. Check Database for activity TODAY
+    challenge_completed = False
+    if st.session_state.user_id:
+        try:
+            # Query: Select * from study_logs where user_id = me AND date = today
+            response = supabase.table("study_logs").select("*").eq("user_id", st.session_state.user_id).eq("date", today).execute()
+            if response.data:
+                challenge_completed = True
+        except:
+            pass # Keep default false if error
+
+    # 3. Display Status
+    if challenge_completed:
+        st.balloons()
+        st.success("✅ MISSION COMPLETE! You studied today.")
+        st.info("Come back tomorrow to keep your streak alive!")
     else:
-        st.warning("In Progress...")
+        st.warning("⚠️ IN PROGRESS")
+        st.write("**Today's Goal:** Complete at least one Study Session, Quiz, or Flashcard review.")
+        st.progress(0)
 
 def render_weekly_progress():
     st.header("📈 Weekly Progress")
