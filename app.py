@@ -207,7 +207,7 @@ if st.session_state.user is None:
             reset_email,
             options={
                 "redirect_to": "https://ai-study-buddy-student.streamlit.app"
-            }
+                }
             )
             st.success("Password reset email sent. Check your inbox.")
         except Exception as e:
