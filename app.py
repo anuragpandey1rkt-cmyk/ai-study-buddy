@@ -33,6 +33,22 @@ load_dotenv()
 
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+user = supabase.auth.get_user()
+
+if user and user.user:
+    st.subheader("🔐 Reset Your Password")
+
+    new_pass = st.text_input("New Password", type="password")
+    confirm_pass = st.text_input("Confirm Password", type="password")
+
+    if st.button("Update Password"):
+        if new_pass != confirm_pass:
+            st.error("Passwords do not match")
+        elif len(new_pass) < 6:
+            st.error("Password must be at least 6 characters")
+        else:
+            supabase.auth.update_user({"password": new_pass})
+            st.success("Password updated successfully")
 
 #helper functions
 def save_study(user_id, minutes):
