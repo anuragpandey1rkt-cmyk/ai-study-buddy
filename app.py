@@ -226,6 +226,8 @@ if st.session_state.user is None:
 
     st.stop()
 
+if "user" not in st.session_state:
+    st.session_state.user = None
     
 # ---------- USER IS AUTHENTICATED ---------
 user_id = st.session_state.user.id
@@ -382,8 +384,6 @@ def animate_xp_gain(points):
         time.sleep(0.6)
     st.toast(f"+{points} XP earned 🎉", icon="⭐")
 
-
-get_or_create_user()
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
