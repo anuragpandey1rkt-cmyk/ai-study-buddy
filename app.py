@@ -588,9 +588,71 @@ def render_study_session():
 
 def render_gamification():
     st.header("🎮 Gamification Dashboard")
-    st.metric("Level", "Master" if st.session_state.xp > 500 else "Novice")
-    st.progress(min(100, st.session_state.xp % 100))
-    st.write(f"Total XP: {st.session_state.xp}")
+
+    # 1. Force Sync with Database to ensure data is visible
+    if st.session_state.user_id:
+        try:
+            # Fetch Stats
+            user_stats = supabase.table("user_stats").select("*").eq("user_id", st.session_state.user_id).execute()
+            if user_stats.data:
+                stats = user_stats.data[0]
+                st.session_state.xp = stats.get('xp', 0)
+                st.session_state.streak = stats.get('streak', 0)
+            
+            # Fetch Study Logs for the Chart
+            logs = supabase.table("study_logs").select("*").eq("user_id", st.session_state.user_id).order("date", desc=True).limit(7).execute()
+        except Exception as e:
+            st.error(f"Connection Error: {e}")
+            logs = None
+    
+    # 2. Display Metrics
+    col1, col2, col3 = st.columns(3)
+    col1.metric("⭐ Total XP", st.session_state.xp)
+    col2.metric("🔥 Current Streak", f"{st.session_state.streak} Days")
+    
+    # Calculate Level
+    xp = st.session_state.xp
+    if xp < 100:
+        level = "Beginner"
+        next_level = 100
+    elif xp < 500:
+        level = "Intermediate"
+        next_level = 500
+    else:
+        level = "Grandmaster"
+        next_level = 1000 # Cap
+
+    col3.metric("🏆 Rank", level)
+
+    # 3. Progress Bar to Next Level
+    st.write(f"**Progress to next level:** {xp}/{next_level} XP")
+    progress_val = min(1.0, xp / next_level) if next_level > 0 else 1.0
+    st.progress(progress_val)
+
+    st.divider()
+
+    # 4. Activity Chart
+    st.subheader("📈 Your Activity (Last 7 Sessions)")
+    if logs and logs.data:
+        # Format data for the chart: {"Date": Minutes}
+        chart_data = {log['date']: log['minutes'] for log in logs.data}
+        st.bar_chart(chart_data)
+    else:
+        st.info("No study logs found yet. Complete a quiz or study session to see your graph!")
+
+    # 5. Badges
+    st.subheader("🏅 Your Badges")
+    badges = []
+    if xp > 0: badges.append("✅ First Step")
+    if xp >= 100: badges.append("🥉 Bronze Scholar")
+    if xp >= 500: badges.append("🥈 Silver Master")
+    if st.session_state.streak >= 3: badges.append("🔥 On Fire")
+    if st.session_state.streak >= 7: badges.append("🗓️ Week Warrior")
+
+    if badges:
+        st.success(f"You have earned: {', '.join(badges)}")
+    else:
+        st.write("Keep studying to earn your first badge!")
 
 def render_mistake_explainer():
     st.header("❌ Mistake Explainer")
