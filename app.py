@@ -6,6 +6,7 @@ import json
 from supabase import create_client
 from groq import Groq
 from PyPDF2 import PdfReader
+import graphviz
 # ==========================================
 # 1. CONFIGURATION & INIT
 # ==========================================
@@ -250,26 +251,41 @@ def render_flashcards():
 
 def render_mindmap():
     st.header("🧠 AI Mind Map Generator")
-    topic = st.text_input("Enter a complex topic (e.g., Photosynthesis, World War II)")
+    topic = st.text_input("Enter a complex topic (e.g., Photosynthesis)")
     
     if st.button("Generate Mind Map"):
         with st.spinner("Drawing diagram..."):
-            # Ask AI to generate Graphviz DOT code
-            prompt = (f"Create a comprehensive mind map for '{topic}' using Graphviz DOT language. "
-                      "Keep labels concise. Output ONLY the DOT code inside a code block. "
-                      "Start with 'digraph G {'.")
+            # 1. Get the DOT code from AI
+            prompt = (f"Create a mind map for '{topic}' using Graphviz DOT language. "
+                      "Output ONLY the DOT code inside a code block. Start with 'digraph G {{'.")
             dot_code = ask_ai(prompt, system_role="You are a Graphviz expert.")
             
-            # Clean up response to get pure DOT code
+            # 2. Clean the code
             if "```" in dot_code:
                 dot_code = dot_code.split("```")[1]
                 if dot_code.startswith("dot"): dot_code = dot_code[3:]
             
+            # 3. Render and Display
             try:
+                # Display on screen
                 st.graphviz_chart(dot_code)
+                
+                # Create downloadable file
+                src = graphviz.Source(dot_code)
+                png_data = src.pipe(format='png')
+                
+                # Download Button
+                st.download_button(
+                    label="📥 Download Mind Map (PNG)",
+                    data=png_data,
+                    file_name=f"{topic}_mindmap.png",
+                    mime="image/png"
+                )
+                
                 add_xp(20, "Mind Map Created")
-            except Exception:
-                st.error("Could not render the diagram. Please try a simpler topic.")
+            except Exception as e:
+                st.error(f"Could not render diagram. Try a simpler topic. Error: {e}")
+
 def render_leaderboard():
     st.header("🏆 Global Leaderboard")
     
@@ -349,16 +365,61 @@ def render_exam_mode():
         st.markdown(ask_ai(f"Give me a hard exam question about {topic}."))
 
 def render_chat():
-    st.header("💬 Chat with AI")
+    st.header("💬 Chat with AI Tutor")
+    
+    # 1. Display Chat History
     for msg in st.session_state.chat_history:
-        st.chat_message(msg['role']).write(msg['content'])
+        with st.chat_message(msg['role']):
+            # If the message has an image, display it first
+            if "image" in msg:
+                st.image(msg["image"], width=200)
+            st.write(msg['content'])
+            
+    # 2. Input Area (Text OR Image)
+    col1, col2 = st.columns([0.85, 0.15])
+    
+    with col1:
+        user_input = st.chat_input("Ask your AI Tutor...")
         
-    if user_input := st.chat_input("Ask your AI Tutor..."):
-        st.session_state.chat_history.append({"role": "user", "content": user_input})
-        st.chat_message("user").write(user_input)
-        response = ask_ai(user_input)
-        st.session_state.chat_history.append({"role": "assistant", "content": response})
-        st.chat_message("assistant").write(response)
+    with col2:
+        # Small upload button next to chat
+        uploaded_img = st.file_uploader("📷", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
+
+    # 3. Handle Inputs
+    if user_input or uploaded_img:
+        # Prepare User Message
+        user_msg = {"role": "user", "content": ""}
+        
+        # Handle Image
+        if uploaded_img:
+            st.image(uploaded_img, width=200) # Preview
+            user_msg["image"] = uploaded_img
+            user_msg["content"] += "[User uploaded an image] "
+            
+        # Handle Text
+        if user_input:
+            user_msg["content"] += user_input
+            
+        # Append to History & Display
+        st.session_state.chat_history.append(user_msg)
+        with st.chat_message("user"):
+            if "image" in user_msg: st.image(user_msg["image"], width=200)
+            st.write(user_msg["content"])
+            
+        # Generate AI Response
+        with st.spinner("Thinking..."):
+            # Note: Since Llama 3.1 8b is text-only, we modify the prompt to acknowledge the image
+            # If you switch to a vision model later, you can send the image bytes directly.
+            if uploaded_img:
+                final_prompt = f"The user uploaded an image. {user_input if user_input else 'Analyze this context.'}"
+            else:
+                final_prompt = user_input
+                
+            response = ask_ai(final_prompt)
+            
+            st.session_state.chat_history.append({"role": "assistant", "content": response})
+            with st.chat_message("assistant"):
+                st.write(response)
 
 def render_roadmap():
     st.header("🗺️ Study Roadmap")
