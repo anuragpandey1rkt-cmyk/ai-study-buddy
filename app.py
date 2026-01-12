@@ -757,7 +757,8 @@ def main():
     f = st.session_state.feature
     if f == "🏠 Home": render_home()
     elif f == "🧠 Mind Map": render_mind_map()    
-    elif f == "🏆 Leaderboard": render_leaderboard()    
+    elif f == "🏆 Leaderboard": render_leaderboard()
+    elif f == "🎮 Gamification Dashboard": render_gamification()
     elif f == "🎯 Daily Challenge": render_daily_challenge()
     elif f == "📈 Weekly Progress": render_weekly_progress()
     elif f == "📘 Explain Topic": render_explain_topic()
