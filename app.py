@@ -557,11 +557,15 @@ with st.sidebar:
 # ==================================================
     
 if st.session_state.feature == "🏠 Home":
-    res = supabase.table("user_stats").select("*").eq("user_id", user_id).execute()
+    if st.session_state.user_id is None:
+        st.info("Please login to see your stats")
+        st.stop()
+
+    res = supabase.table("user_stats").select("*").eq("st.session_state.user_id", user_id).execute()
 
     if not res.data:
         supabase.table("user_stats").insert({
-            "user_id": user_id,
+            "user_id": st.session_state.user_id,
             "xp": 0,
             "streak": 0,
             "last_study_date": str(datetime.date.today())
