@@ -5,7 +5,7 @@ import os
 import json
 from supabase import create_client
 from groq import Groq
-
+from PyPDF2 import PdfReader
 # ==========================================
 # 1. CONFIGURATION & INIT
 # ==========================================
@@ -82,7 +82,15 @@ def ask_ai(prompt, system_role="You are a helpful AI tutor."):
         return completion.choices[0].message.content
     except Exception as e:
         return f"AI Error: {str(e)}"
-
+def extract_text_from_pdf(uploaded_file):
+    try:
+        pdf_reader = PdfReader(uploaded_file)
+        text = ""
+        for page in pdf_reader.pages:
+            text += page.extract_text()
+        return text
+    except Exception as e:
+        return None
 # --- AUTHENTICATION ---
 def login_user(email, password):
     try:
@@ -248,12 +256,40 @@ def render_explain_topic():
         st.markdown(res)
         add_xp(15, "Explanation")
 
+# --- UPDATED SUMMARY WITH PDF UPLOAD ---
 def render_summary():
     st.header("📝 Summarize Notes")
-    text = st.text_area("Paste your notes here", height=200)
-    if st.button("Summarize"):
-        st.markdown(ask_ai(f"Summarize these notes in bullet points:\n{text}"))
-        add_xp(15, "Summary")
+    
+    tab1, tab2 = st.tabs(["✍️ Paste Text", "📂 Upload PDF"])
+    
+    notes_text = ""
+
+    with tab1:
+        text_input = st.text_area("Paste your notes here", height=200)
+        if text_input:
+            notes_text = text_input
+
+    with tab2:
+        uploaded_file = st.file_uploader("Upload PDF Notes", type=['pdf'])
+        if uploaded_file is not None:
+            extracted_text = extract_text_from_pdf(uploaded_file)
+            if extracted_text:
+                st.success("PDF Loaded Successfully!")
+                with st.expander("View Extracted Text"):
+                    st.write(extracted_text[:1000] + "...") # Preview
+                notes_text = extracted_text
+            else:
+                st.error("Could not extract text from PDF.")
+
+    if st.button("Generate Summary"):
+        if notes_text:
+            with st.spinner("AI is analyzing your notes..."):
+                # Limit text to prevent token errors (approx 4000 chars)
+                summary = ask_ai(f"Summarize these notes in structured bullet points:\n{notes_text[:12000]}")
+                st.markdown(summary)
+                add_xp(15, "Summary")
+        else:
+            st.warning("Please paste text or upload a PDF first.")
 
 def render_exam_mode():
     st.header("⏱️ Exam Mode")
