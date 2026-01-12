@@ -3,12 +3,10 @@ import datetime
 import time
 import os
 import json
-import re
 from supabase import create_client
 from groq import Groq
 from PyPDF2 import PdfReader
 import graphviz
-from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
 # ==========================================
 # 1. CONFIGURATION & INIT
 # ==========================================
@@ -70,46 +68,6 @@ def go_to(page):
 # ==========================================
 # 3. BACKEND HELPERS (AI, Auth, DB)
 # ==========================================
-# ... inside Section 3 ...
-
-from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
-#extract_youtube_transcript
-def extract_youtube_transcript(video_url):
-    try:
-        # 1. Extract Video ID using Regex
-        video_id_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", video_url)
-        if not video_id_match:
-            return "Error: Invalid YouTube URL"
-        
-        video_id = video_id_match.group(1)
-        
-        # 2. Fetch the list of ALL available transcripts (Manual + Auto-generated)
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-        
-        # 3. Smart Selection Logic
-        # It tries to find English or Hindi (Manual or Auto)
-        # If it can't find exact matches, it defaults to the first available transcript
-        try:
-            # Prioritize English and Hindi
-            transcript = transcript_list.find_transcript(['en', 'hi', 'en-US', 'hi-IN'])
-        except:
-            # FALLBACK: If specific languages aren't found, just get ANY available transcript
-            # This allows it to work even if the video is in a different language or uses weird codes
-            transcript = next(iter(transcript_list))
-
-        # 4. Fetch the actual text
-        transcript_data = transcript.fetch()
-        full_text = " ".join([entry['text'] for entry in transcript_data])
-        
-        return full_text
-
-    except TranscriptsDisabled:
-        return "Error: Subtitles are completely disabled for this video."
-    except NoTranscriptFound:
-        return "Error: No subtitles (manual or auto) found. Try a different video."
-    except Exception as e:
-        return f"Error: {str(e)}"
-
 def ask_ai(prompt, system_role="You are a helpful AI tutor."):
     try:
         completion = groq_client.chat.completions.create(
@@ -363,99 +321,41 @@ def render_explain_topic():
         st.markdown(res)
         add_xp(15, "Explanation")
 
-def render_youtube_summary():
-    st.header("📺 YouTube Video Summarizer")
-    st.info("Paste a YouTube URL below. I will try to fetch Manual OR Auto-generated captions.")
-    
-    yt_url = st.text_input("Enter YouTube Video URL")
-    
-    if st.button("Fetch & Summarize"):
-        if not yt_url:
-            st.warning("Please enter a URL first.")
-            return
-
-        with st.spinner("Fetching transcript (checking for auto-captions)..."):
-            transcript = extract_youtube_transcript(yt_url)
-            
-            if transcript.startswith("Error:"):
-                st.error(transcript)
-                st.help("Try a video that definitely has 'CC' visible on YouTube.")
-            else:
-                st.success("Transcript successfully fetched!")
-                
-                # Expandable Transcript View
-                with st.expander("View Full Transcript"):
-                    st.write(transcript[:2000] + ("..." if len(transcript) > 2000 else ""))
-
-                # Summarize
-                with st.spinner("AI is summarizing..."):
-                    summary = ask_ai(f"Summarize this YouTube video transcript into key takeaways and bullet points:\n\n{transcript[:15000]}")
-                    st.markdown("### 📝 Video Summary")
-                    st.markdown(summary)
-                    add_xp(25, "YouTube Summary")
-
-
 # --- UPDATED SUMMARY WITH PDF UPLOAD ---
 def render_summary():
-    st.header("📝 Summarize Content")
+    st.header("📝 Summarize Notes")
     
-    tab1, tab2, tab3 = st.tabs(["✍️ Paste Text", "📂 Upload PDF", "📺 YouTube Video"])
+    tab1, tab2 = st.tabs(["✍️ Paste Text", "📂 Upload PDF"])
     
-    content_to_summarize = ""
+    notes_text = ""
 
-    # Tab 1: Paste Text
     with tab1:
         text_input = st.text_area("Paste your notes here", height=200)
         if text_input:
-            content_to_summarize = text_input
+            notes_text = text_input
 
-    # Tab 2: Upload PDF
     with tab2:
         uploaded_file = st.file_uploader("Upload PDF Notes", type=['pdf'])
         if uploaded_file is not None:
             extracted_text = extract_text_from_pdf(uploaded_file)
             if extracted_text:
                 st.success("PDF Loaded Successfully!")
-                content_to_summarize = extracted_text
+                with st.expander("View Extracted Text"):
+                    st.write(extracted_text[:1000] + "...") # Preview
+                notes_text = extracted_text
             else:
                 st.error("Could not extract text from PDF.")
 
-    # Tab 3: YouTube (UPDATED)
-    with tab3:
-        st.info("Supported: English & Hindi videos (Manual or Auto-captions)")
-        yt_url = st.text_input("Enter YouTube Video URL")
-        
-        if st.button("Fetch Transcript"):
-            if yt_url:
-                with st.spinner("Searching for captions (including auto-generated)..."):
-                    transcript = extract_youtube_transcript(yt_url)
-                    
-                    if "Error:" in transcript:
-                        st.error(transcript)
-                    else:
-                        st.success("Transcript loaded!")
-                        # Store in session state so it doesn't vanish on re-run
-                        st.session_state['temp_transcript'] = transcript
-                        with st.expander("View Transcript"):
-                            st.write(transcript[:1000] + "...")
-            else:
-                st.warning("Please enter a URL first.")
-
-        # Check if we have a transcript stored from the button click above
-        if 'temp_transcript' in st.session_state:
-            content_to_summarize = st.session_state['temp_transcript']
-
-    # Generate Summary Button (Works for all 3 tabs)
     if st.button("Generate Summary"):
-        if content_to_summarize:
-            with st.spinner("AI is analyzing content..."):
-                # We limit to 12,000 chars to avoid breaking the AI limit
-                summary = ask_ai(f"Summarize this content (which may be in Hindi or English) into structured English bullet points:\n{content_to_summarize[:12000]}")
+        if notes_text:
+            with st.spinner("AI is analyzing your notes..."):
+                # Limit text to prevent token errors (approx 4000 chars)
+                summary = ask_ai(f"Summarize these notes in structured bullet points:\n{notes_text[:12000]}")
                 st.markdown(summary)
                 add_xp(15, "Summary")
         else:
-            st.warning("Please provide content (Text, PDF, or Video) first.")
-
+            st.warning("Please paste text or upload a PDF first.")
+            
 def render_exam_mode():
     st.header("⏱️ Exam Mode")
     st.info("Generates a long-form question for you to practice writing.")
@@ -695,7 +595,7 @@ def main():
         
         # FEATURE LIST
         features = [
-            "🏠 Home","📺 YouTube Summarizer","💬 Chat with AI", "🎮 Gamification Dashboard","🏆 Leaderboard", "🎯 Daily Challenge", "📈 Weekly Progress",
+            "🏠 Home","💬 Chat with AI", "🎮 Gamification Dashboard","🏆 Leaderboard", "🎯 Daily Challenge", "📈 Weekly Progress",
             "📘 Explain Topic", "📝 Summarize Notes", "❓ Quiz Generator","🧠 Mind Maps",
             "⏱️ Exam Mode","⏳ Study Session", "📚 Flashcards","🧠 Self Assessment", "🔁 Revision Mode", "🎯 Learning Outcomes",
             "💼 Career Connection", "❌ Mistake Explainer", 
@@ -720,7 +620,6 @@ def main():
     # ROUTING
     f = st.session_state.feature
     if f == "🏠 Home": render_home()
-    elif f == "📺 YouTube Summarizer": render_youtube_summary()
     elif f == "🧠 Mind Map": render_mind_map()    
     elif f == "🏆 Leaderboard": render_leaderboard()    
     elif f == "🎯 Daily Challenge": render_daily_challenge()
