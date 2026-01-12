@@ -357,12 +357,44 @@ def render_summary():
             st.warning("Please paste text or upload a PDF first.")
             
 def render_exam_mode():
-    st.header("⏱️ Exam Mode")
-    st.info("Generates a long-form question for you to practice writing.")
-    topic = st.text_input("Exam Topic")
-    if st.button("Start Exam"):
-        st.markdown(ask_ai(f"Give me a hard exam question about {topic}."))
+    st.header("⏱️ Exam Mode (AI Grader)")
+    st.info("The AI will set a question, you answer it, and it will grade you.")
 
+    # 1. Select Topic
+    topic = st.text_input("Enter Subject/Topic for Exam")
+    
+    # 2. Generate Question
+    if st.button("Start Exam (Generate Question)"):
+        with st.spinner("Setting exam paper..."):
+            question = ask_ai(f"Create a challenging, university-level short-answer exam question about '{topic}'. Only provide the question.")
+            st.session_state['exam_question'] = question
+            st.session_state['exam_answer_graded'] = False # Reset state
+
+    # 3. Display Question & Answer Box
+    if 'exam_question' in st.session_state:
+        st.markdown(f"### 📝 Question: {st.session_state['exam_question']}")
+        
+        user_answer = st.text_area("Write your answer here:", height=200)
+        
+        # 4. Grade the Answer
+        if st.button("Submit for Grading"):
+            if user_answer:
+                with st.spinner("Grading your paper..."):
+                    # Ask AI to grade it
+                    feedback = ask_ai(
+                        f"Question: {st.session_state['exam_question']}\n"
+                        f"Student Answer: {user_answer}\n\n"
+                        f"Task: Grade this answer out of 10. Explain where they lost marks and how to improve. Be strict."
+                    )
+                    st.markdown("### 👨‍🏫 Teacher's Feedback")
+                    st.markdown(feedback)
+                    
+                    # Award XP only if they haven't been graded for this yet
+                    if not st.session_state.get('exam_answer_graded'):
+                        add_xp(50, "Completed Exam Question")
+                        st.session_state['exam_answer_graded'] = True
+            else:
+                st.warning("Please write an answer first.")
 def render_chat():
     st.header("💬 Chat with AI ( & Documents)")
 
@@ -681,38 +713,82 @@ def render_revision():
         st.markdown(ask_ai(f"Give me 5 crucial bullet points to remember about {topic}"))
 
 def render_self_assessment():
-    st.header("🧠 Self Assessment")
-    st.write("Reflect on your learning. How confident do you feel about what you studied today?")
-    
-    # Input
-    topic = st.text_input("What topic did you just finish?")
-    confidence = st.slider("Confidence Level", 1, 5, 3)
-    
-    if st.button("Save Assessment"):
-        if topic:
-            if st.session_state.user_id:
-                try:
-                    # Save to DB
-                    # We use 'activity_type' to store the details
-                    activity_note = f"Self Assessment: {confidence}/5 on '{topic}'"
-                    
-                    supabase.table("study_logs").insert({
-                        "user_id": st.session_state.user_id,
-                        "minutes": 5, # Award 5 mins of 'reflection time'
-                        "activity_type": activity_note,
-                        "date": str(datetime.date.today())
-                    }).execute()
-                    
-                    st.success("✅ Assessment Logged!")
-                    add_xp(10, "Self Reflection") # Real XP update
-                    
-                except Exception as e:
-                    st.error(f"Error saving: {e}")
-            else:
-                st.warning("Please login to save.")
-        else:
-            st.warning("Please enter the topic name first.")
+    st.header("🧠 Self Assessment & Verification")
+    st.info("Claim your confidence level by passing a verification test.")
 
+    # Initialize Session State for this specific feature
+    if "assessment_stage" not in st.session_state:
+        st.session_state.assessment_stage = "setup" # setup -> test -> result
+    if "assessment_data" not in st.session_state:
+        st.session_state.assessment_data = []
+    if "assessment_topic" not in st.session_state:
+        st.session_state.assessment_topic = ""
+
+    # --- STAGE 1: SETUP ---
+    if st.session_state.assessment_stage == "setup":
+        st.session_state.assessment_topic = st.text_input("What topic did you just finish studying?")
+        target_level = st.selectbox("How confident do you feel?", ["Low (Beginner)", "Medium (Intermediate)", "High (Expert)"])
+        
+        if st.button("Start Verification Test"):
+            if st.session_state.assessment_topic:
+                with st.spinner(f"Generating {target_level} level questions for {st.session_state.assessment_topic}..."):
+                    # Prompt for JSON format
+                    prompt = (
+                        f"Create 10 multiple choice questions about '{st.session_state.assessment_topic}'. "
+                        f"Difficulty Level: {target_level}. "
+                        "Output ONLY valid JSON format like this: "
+                        "[{'q': 'Question text', 'options': ['A', 'B', 'C', 'D'], 'correct': 'Option Text'}, ...]"
+                    )
+                    try:
+                        response = ask_ai(prompt, system_role="You are a strict JSON generator.")
+                        # Parse JSON
+                        start = response.find('[')
+                        end = response.rfind(']') + 1
+                        json_str = response[start:end]
+                        st.session_state.assessment_data = json.loads(json_str)
+                        st.session_state.assessment_stage = "test"
+                        st.rerun()
+                    except Exception as e:
+                        st.error("AI failed to generate test. Please try again.")
+            else:
+                st.warning("Please enter a topic.")
+
+    # --- STAGE 2: THE TEST ---
+    elif st.session_state.assessment_stage == "test":
+        st.subheader(f"📝 Verification Test: {st.session_state.assessment_topic}")
+        
+        # Form to hold all answers
+        with st.form("assessment_form"):
+            user_answers = {}
+            for i, q in enumerate(st.session_state.assessment_data):
+                st.write(f"**Q{i+1}: {q['q']}**")
+                user_answers[i] = st.radio(f"Select answer for Q{i+1}", q['options'], key=f"assess_q_{i}")
+                st.divider()
+            
+            submitted = st.form_submit_button("Submit Assessment")
+            
+            if submitted:
+                # Calculate Score
+                score = 0
+                for i, q in enumerate(st.session_state.assessment_data):
+                    if user_answers[i] == q['correct']:
+                        score += 1
+                
+                st.session_state.assessment_score = score
+                st.session_state.assessment_stage = "result"
+                st.rerun()
+
+    # --- STAGE 3: RESULTS & SAVING ---
+    elif st.session_state.assessment_stage == "result":
+        score = st.session_state.assessment_score
+        total = len(st.session_state.assessment_data)
+        percentage = (score / total) * 100
+        
+        st.subheader("📊 Assessment Results")
+        st.metric("Your Score", f"{score}/{total}", f"{percentage}%")
+        
+        if percentage >= 80:
+            st.balloons()
 def render_daily_challenge():
     st.header("🎯 Daily Challenge")
     
