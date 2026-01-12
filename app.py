@@ -8,13 +8,6 @@ import time
 import datetime
 from groq import Groq
 
-#st.write("SUPABASE_URL exists:", bool(os.getenv("SUPABASE_URL")))
-#st.write("SUPABASE_ANON_KEY exists:", bool(os.getenv("SUPABASE_ANON_KEY")))
-
-#if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_ANON_KEY"):
- #   st.error("Supabase credentials not found. Check Streamlit Secrets.")
- #   st.stop()
-
 st.markdown("""
 <style>
 button {
@@ -32,12 +25,17 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_ANON_KEY"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+if "user" not in st.session_state:
+    st.session_state.user = None
 
 from dotenv import load_dotenv
 load_dotenv()
 
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+#to get user_id
+user_id = st.session_state.user.id
+#helper functions
 def save_study(user_id, minutes):
     today = str(datetime.date.today())
 
@@ -94,9 +92,30 @@ def ensure_user_exists(user_id):
         }).execute()
 
 
-
-
-#helper functions
+def signup(email, password):
+    try:
+        res = supabase.auth.sign_up({
+            "email": email,
+            "password": password
+        })
+        st.success("Account created! You can log in now.")
+    except Exception as e:
+        st.error("Signup failed")
+def login(email, password):
+    try:
+        res = supabase.auth.sign_in_with_password({
+            "email": email,
+            "password": password
+        })
+        st.session_state.user = res.user
+        st.success("Logged in successfully!")
+        st.rerun()
+    except Exception:
+        st.error("Invalid email or password")
+def logout():
+    supabase.auth.sign_out()
+    st.session_state.user = None
+    st.rerun()
 
 def complete_weekly_challenge(user_id):
     week_id = datetime.date.today().strftime("%Y-%W")
@@ -154,18 +173,23 @@ def register_activity():
 #SIMPLE LOGIN UI (EMAIL MAGIC LINK)
 st.title("📘 AI Study Buddy")
 
-if "user" not in st.session_state:
-    email = st.text_input("📧 Enter your email")
-    if st.button("🔐 Send Magic Link"):
-        supabase.auth.sign_in_with_otp({"email": email})
-        st.success("Check your email for the login link")
-    st.stop()
-session = supabase.auth.get_session()
+if st.session_state.user is None:
+    tab1, tab2 = st.tabs(["🔐 Login", "🆕 Sign Up"])
 
-if session and session.user:
-    st.session_state.user = session.user
-    user_id = session.user.id
-ensure_user_exists(user_id)
+    with tab1:
+        email = st.text_input("Email", key="login_email")
+        password = st.text_input("Password", type="password", key="login_password")
+        if st.button("Login"):
+            login(email, password)
+
+    with tab2:
+        email = st.text_input("Email", key="signup_email")
+        password = st.text_input("Password", type="password", key="signup_password")
+        if st.button("Create Account"):
+            signup(email, password)
+
+    st.stop()
+
 
 
 # ---------------- SESSION STATE INIT ----------------
@@ -193,6 +217,7 @@ def go_home():
 
 def go_to(name):
     st.session_state.feature = name
+
 
 # =========================
 # ⬅️ GLOBAL BACK BUTTON
@@ -403,6 +428,9 @@ with st.sidebar:
 
     if selected != st.session_state.feature:
         st.session_state.feature = selected
+    st.sidebar.success(f"Logged in as {st.session_state.user.email}")
+    if st.sidebar.button("🚪 Logout"):
+        logout()
 
 
     st.divider()
