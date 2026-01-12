@@ -1,20 +1,19 @@
 # ==================================================
 # 📘 AI STUDY BUDDY — FIXED & COMPLETE VERSION
 # ==================================================
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client
 import os
-from dotenv import load_dotenv
+import streamlit as st
+import time
+import datetime
+from groq import Groq
 
-st.write("SUPABASE_URL exists:", bool(os.getenv("SUPABASE_URL")))
-st.write("SUPABASE_ANON_KEY exists:", bool(os.getenv("SUPABASE_ANON_KEY")))
+#st.write("SUPABASE_URL exists:", bool(os.getenv("SUPABASE_URL")))
+#st.write("SUPABASE_ANON_KEY exists:", bool(os.getenv("SUPABASE_ANON_KEY")))
 
-if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_ANON_KEY"):
-    st.error("Supabase credentials not found. Check Streamlit Secrets.")
-    st.stop()
-
-load_dotenv()
+#if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_ANON_KEY"):
+ #   st.error("Supabase credentials not found. Check Streamlit Secrets.")
+ #   st.stop()
 
 st.markdown("""
 <style>
@@ -29,58 +28,60 @@ button {
 </style>
 """, unsafe_allow_html=True)
 
-supabase = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_ANON_KEY")
-)
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_ANON_KEY"]
 
-app = FastAPI()
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # later restrict to frontend URL
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
 from dotenv import load_dotenv
 load_dotenv()
 
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 def save_study(user_id, minutes):
-    today = datetime.date.today()
+    today = str(datetime.date.today())
 
-    # log study
+    # 1. Log study
     supabase.table("study_logs").insert({
         "user_id": user_id,
-        "date": str(today),
+        "date": today,
         "minutes": minutes
     }).execute()
 
-    # fetch stats
-    stats = supabase.table("user_stats").select("*").eq("user_id", user_id).execute().data[0]
+    # 2. Fetch stats
+    res = supabase.table("user_stats").select("*").eq("user_id", user_id).execute()
+
+    if not res.data:
+        supabase.table("user_stats").insert({
+            "user_id": user_id,
+            "xp": 0,
+            "streak": 0,
+            "last_study_date": today
+        }).execute()
+        return
+
+    stats = res.data[0]
 
     xp_gain = minutes * 2
     new_xp = stats["xp"] + xp_gain
 
-    # streak logic
-    last_date = stats["last_study_date"]
-    if last_date == str(today - datetime.timedelta(days=1)):
+    # 3. Streak logic
+    yesterday = str(datetime.date.today() - datetime.timedelta(days=1))
+
+    if stats["last_study_date"] == yesterday:
         streak = stats["streak"] + 1
-    elif last_date == str(today):
+    elif stats["last_study_date"] == today:
         streak = stats["streak"]
     else:
         streak = 1
 
+    # 4. Update stats
     supabase.table("user_stats").update({
         "xp": new_xp,
         "streak": streak,
-        "last_study_date": str(today)
+        "last_study_date": today
     }).eq("user_id", user_id).execute()
+
     
 def ensure_user_exists(user_id):
     res = supabase.table("user_stats").select("*").eq("user_id", user_id).execute()
@@ -93,11 +94,7 @@ def ensure_user_exists(user_id):
         }).execute()
 
 
-from supabase import create_client
-import streamlit as st
-import time
-import datetime
-from groq import Groq
+
 
 #helper functions
 
@@ -172,7 +169,6 @@ ensure_user_exists(user_id)
 
 
 # ---------------- SESSION STATE INIT ----------------
-import datetime
 
 defaults = {
     "feature": "🏠 Home",
