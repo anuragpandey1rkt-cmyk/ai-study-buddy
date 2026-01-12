@@ -70,7 +70,8 @@ def auth():
                 st.session_state.user = res.user
                 st.session_state.user_id = res.user.id
                 ensure_user(res.user.id)
-                st.experimental_rerun()
+                st.rerun()
+
             else:
                 st.error("Invalid credentials")
 
@@ -99,7 +100,8 @@ def sidebar():
             supabase.auth.sign_out()
             for k in defaults:
                 st.session_state[k] = defaults[k]
-            st.experimental_rerun()
+            st.rerun()
+
 
 # ---------------- FEATURES ----------------
 
