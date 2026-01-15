@@ -1,7 +1,7 @@
 
 # 📘 AI Study Buddy
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://ai-study-buddy.streamlit.app)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://ai-study-buddy-student.streamlit.app)
 
 **AI Study Buddy** is a comprehensive, gamified learning platform...
 AI Study Buddy is a comprehensive, gamified learning platform built with Streamlit. It leverages Groq (Llama 3) for high-speed AI generation and Supabase for authentication and backend database management.
