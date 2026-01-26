@@ -130,15 +130,19 @@ def signup_user(email, password):
     try:
         response = supabase.auth.sign_up({"email": email, "password": password})
         if response.user:
+            # FIX: Removed 'level' because it doesn't exist in your DB
             supabase.table("user_stats").insert({
                 "user_id": response.user.id,
                 "xp": 0,
-                "streak": 0,
-                "level": "Beginner"
+                "streak": 0
             }).execute()
-            st.success("Account created! Please log in.")
+            st.success("✅ Account created! Please check your email to verify your account before logging in.")
     except Exception as e:
-        st.error(f"Signup failed: {e}")
+        # Check if it's actually a success but hidden in a weird response
+        if "User already registered" in str(e):
+            st.warning("User already registered. Please log in.")
+        else:
+            st.error(f"Signup failed: {e}")
 
 def logout_user():
     supabase.auth.sign_out()
