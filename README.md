@@ -1,112 +1,110 @@
 # 📘 AI Study Buddy
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://ai-study-buddy-student.streamlit.app)
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**AI Study Buddy** is a comprehensive, gamified learning platform...
-AI Study Buddy is a comprehensive, gamified learning platform built with Streamlit. It leverages Groq (Llama 3) for high-speed AI generation and Supabase for authentication and backend database management.
+> **Study smarter, not harder.** An AI-powered, gamified learning platform that combines personalized tutoring, active recall tools, and productivity tracking — all in one place.
 
-This application acts as a personal tutor, allowing users to generate quizzes, summaries, flashcards, mind maps, and study roadmaps while tracking progress through XP and streaks.
+🔗 **Live Demo:** https://ai-study-buddy-student.streamlit.app
 
-🚀 Features
-🧠 AI Learning Tools
-Explain Topic: Get explanations tailored to different levels (5-Year Old, High School, University).
+---
 
-Quiz Generator: AI-generated interactive quizzes with instant feedback.
+## ✨ What It Does
 
-Summarize Notes: Upload PDFs or paste text to get structured bullet-point summaries.
+Most students struggle with three things: **understanding concepts**, **staying consistent**, and **revising effectively**. AI Study Buddy solves all three.
 
-Mind Maps: Generate visual mind maps for complex topics (downloadable as PNG).
+| Problem | Solution |
+|---|---|
+| Hard to understand topics | Multi-level AI explanations (5-year-old → University) |
+| Inconsistent study habits | XP system, streaks, badges & Pomodoro timer |
+| Ineffective revision | Flashcards, quizzes, mind maps & exam mode |
 
-Flashcards: AI-generated flashcards for quick revision.
+---
 
-Chat with Documents (RAG): Upload a PDF and chat specifically about its content.
+## 🧠 Features
 
-Exam Mode: The AI sets a question, grades your written answer, and provides feedback.
+### AI Learning Tools
+- **Explain Topic** — Adaptive explanations at 3 levels: *5-Year Old*, *High School*, *University*
+- **Quiz Generator** — AI-generated multiple-choice quizzes with instant feedback
+- **PDF Summarizer** — Upload PDFs or paste text to get structured bullet-point summaries
+- **Flashcard Generator** — AI flashcards for active recall and quick revision
+- **Mind Map Generator** — Visual mind maps for complex topics (downloadable as PNG)
+- **Chat with Documents (RAG)** — Upload a PDF and ask questions about its content
+- **Exam Mode** — AI sets a question, grades your written answer, and gives detailed feedback
+- **Study Roadmap** — Personalized day-by-day plans to learn any skill or topic
 
-🎮 Gamification & Tracking
-XP System & Leaderboard: Earn XP for every study activity and compete globally.
+### 🎮 Gamification & Progress Tracking
+- **XP System & Leaderboard** — Earn XP for every activity and compete globally
+- **Daily Streaks** — Stay motivated with streak tracking
+- **Achievement Badges** — Unlock badges like *"Bronze Scholar"* and *"Week Warrior"*
+- **Smart Focus Timer** — Pomodoro-style timer with auto XP rewards on completion
+- **Weekly Analytics** — Visual charts of your study time and progress
 
-Streaks: Daily tracking to keep you motivated.
+---
 
-Badges: Earn achievements like "Bronze Scholar" or "Week Warrior."
+## 🛠 Tech Stack
 
-Smart Focus Timer: Pomodoro-style timer with Focus/Break cycles that auto-awards XP.
+| Layer | Technology |
+|---|---|
+| Frontend | Streamlit |
+| AI Inference | Groq API (Llama 3) |
+| Backend & Auth | Supabase |
+| PDF Processing | PyPDF2 |
+| Visualization | Graphviz |
 
-Weekly Progress: Visual charts of your study time.
+---
 
-🛠 Utility
-Study Roadmap: Generate a day-by-day plan to learn any skill.
+## ⚙️ Setup & Installation
 
-PWA Ready: optimized for mobile usage (Installable as a web app).
+### Prerequisites
+- Python 3.8+
+- A [Supabase](https://supabase.com) account
+- A [Groq API key](https://console.groq.com)
+- Graphviz installed on your system:
+  - **Windows:** [Download Installer](https://graphviz.org/download/)
+  - **Mac:** `brew install graphviz`
+  - **Linux:** `sudo apt-get install graphviz`
 
-🛠️ Tech Stack
-Frontend: Streamlit
-
-AI Inference: Groq API (using Llama 3 models)
-
-Backend & Auth: Supabase
-
-PDF Processing: PyPDF2
-
-Visualization: Graphviz
-
-⚙️ Installation & Setup
-1. Prerequisites
-Python 3.8+
-
-A Supabase account (for Auth and Database).
-
-A Groq API Key (for the LLM).
-
-Graphviz installed on your system (required for the Mind Map feature).
-
-Windows: Download Installer
-
-Mac: brew install graphviz
-
-Linux: sudo apt-get install graphviz
-
-2. Clone the Repository
-Bash
-
-git clone https://github.com/yourusername/ai-study-buddy.git
+### 1. Clone the Repository
+```bash
+git clone https://github.com/anuragpandey1rkt-cmyk/ai-study-buddy.git
 cd ai-study-buddy
-3. Install Dependencies
-Create a requirements.txt file (if not present) with the following and install it:
+```
 
-Plaintext
-
-streamlit
-supabase
-groq
-PyPDF2
-graphviz
-Bash
-
+### 2. Install Dependencies
+```bash
 pip install -r requirements.txt
-4. Configuration (Secrets)
-Create a .streamlit folder in the root directory and add a secrets.toml file:
+```
 
-Bash
-
+### 3. Configure Secrets
+Create a `.streamlit/secrets.toml` file:
+```bash
 mkdir .streamlit
 touch .streamlit/secrets.toml
-Open .streamlit/secrets.toml and add your keys:
+```
 
-Ini, TOML
-
+Add your API keys:
+```toml
 SUPABASE_URL = "your_supabase_project_url"
 SUPABASE_ANON_KEY = "your_supabase_anon_key"
 GROQ_API_KEY = "your_groq_api_key"
-🗄️ Database Setup (Supabase)
-You need to create two tables in your Supabase project for the app to work. Run the following SQL in your Supabase SQL Editor:
+```
 
-1. Create user_stats Table
-Stores XP, streaks, and levels.
+### 4. Run the App
+```bash
+streamlit run app.py
+```
 
-SQL
+---
 
-create table user_stats (
+## 🗄️ Database Setup (Supabase)
+
+Run the following SQL in your Supabase SQL Editor:
+
+```sql
+-- Stores XP, streaks, and levels
+CREATE TABLE user_stats (
   id bigint generated by default as identity primary key,
   user_id uuid references auth.users not null,
   xp int default 0,
@@ -115,48 +113,41 @@ create table user_stats (
   last_study_date text
 );
 
--- Enable Row Level Security (RLS) is recommended, 
--- but for a quick start you can disable it or set policies.
-2. Create study_logs Table
-Tracks daily study minutes for the graphs.
-
-SQL
-
-create table study_logs (
+-- Tracks daily study minutes for progress graphs
+CREATE TABLE study_logs (
   id bigint generated by default as identity primary key,
   user_id uuid references auth.users not null,
   minutes int default 0,
   activity_type text,
   date text
 );
-🏃‍♂️ Running the App
-Run the application using the Streamlit CLI:
+```
 
-Bash
+---
 
-streamlit run app.py
-Note: Replace app.py with the actual name of your Python file if it is different.
+## 📱 Mobile Support (PWA)
 
-📱 Mobile Support (PWA)
-The app includes meta tags to function like a native app on mobile devices.
+AI Study Buddy is installable as a Progressive Web App:
 
-Open the app URL on your mobile browser (Safari/Chrome).
+1. Open the app URL in your mobile browser (Safari / Chrome)
+2. Tap **Share** (iOS) or **Menu** (Android)
+3. Select **"Add to Home Screen"**
+4. Launches in full-screen mode like a native app
 
-Tap Share (iOS) or Menu (Android).
+---
 
-Select "Add to Home Screen".
+## 🤝 Contributing
 
-It will launch in full-screen mode without the browser bar.
-
-🤝 Contributing
 Contributions are welcome!
 
-Fork the project.
+1. Fork the repository
+2. Create your feature branch: `git checkout -b feature/AmazingFeature`
+3. Commit your changes: `git commit -m 'Add AmazingFeature'`
+4. Push to the branch: `git push origin feature/AmazingFeature`
+5. Open a Pull Request
 
-Create your feature branch (git checkout -b feature/AmazingFeature).
+---
 
-Commit your changes (git commit -m 'Add some AmazingFeature').
+## ⭐ Support
 
-Push to the branch (git push origin feature/AmazingFeature).
-
-Open a Pull Request.
+If you found this project useful, consider giving it a **star** on GitHub — it helps a lot!
